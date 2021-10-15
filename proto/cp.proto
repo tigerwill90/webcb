@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package proto;
+
+import "google/protobuf/empty.proto";
+
+option go_package = "github.com/tigerwill90/wpc/proto";
+
+message Payload {
+  oneof data {
+    bytes uuid = 1;
+    bytes chunk = 2;
+  }
+}
+
+service Web {
+  rpc Copy (stream Payload) returns (google.protobuf.Empty) {}
+  rpc Paste (google.protobuf.Empty) returns (stream Payload) {}
+}
