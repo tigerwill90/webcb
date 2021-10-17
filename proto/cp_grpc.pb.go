@@ -20,7 +20,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type WebClipboardClient interface {
 	Copy(ctx context.Context, opts ...grpc.CallOption) (WebClipboard_CopyClient, error)
-	Paste(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (WebClipboard_PasteClient, error)
+	Paste(ctx context.Context, in *PasteOption, opts ...grpc.CallOption) (WebClipboard_PasteClient, error)
 }
 
 type webClipboardClient struct {
@@ -65,7 +65,7 @@ func (x *webClipboardCopyClient) CloseAndRecv() (*emptypb.Empty, error) {
 	return m, nil
 }
 
-func (c *webClipboardClient) Paste(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (WebClipboard_PasteClient, error) {
+func (c *webClipboardClient) Paste(ctx context.Context, in *PasteOption, opts ...grpc.CallOption) (WebClipboard_PasteClient, error) {
 	stream, err := c.cc.NewStream(ctx, &WebClipboard_ServiceDesc.Streams[1], "/proto.WebClipboard/Paste", opts...)
 	if err != nil {
 		return nil, err
@@ -102,7 +102,7 @@ func (x *webClipboardPasteClient) Recv() (*Payload, error) {
 // for forward compatibility
 type WebClipboardServer interface {
 	Copy(WebClipboard_CopyServer) error
-	Paste(*emptypb.Empty, WebClipboard_PasteServer) error
+	Paste(*PasteOption, WebClipboard_PasteServer) error
 	mustEmbedUnimplementedWebClipboardServer()
 }
 
@@ -113,7 +113,7 @@ type UnimplementedWebClipboardServer struct {
 func (UnimplementedWebClipboardServer) Copy(WebClipboard_CopyServer) error {
 	return status.Errorf(codes.Unimplemented, "method Copy not implemented")
 }
-func (UnimplementedWebClipboardServer) Paste(*emptypb.Empty, WebClipboard_PasteServer) error {
+func (UnimplementedWebClipboardServer) Paste(*PasteOption, WebClipboard_PasteServer) error {
 	return status.Errorf(codes.Unimplemented, "method Paste not implemented")
 }
 func (UnimplementedWebClipboardServer) mustEmbedUnimplementedWebClipboardServer() {}
@@ -156,7 +156,7 @@ func (x *webClipboardCopyServer) Recv() (*Payload, error) {
 }
 
 func _WebClipboard_Paste_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(emptypb.Empty)
+	m := new(PasteOption)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}

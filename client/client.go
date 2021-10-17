@@ -3,17 +3,20 @@ package client
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/tigerwill90/webcb/proto"
 	"google.golang.org/grpc"
 	"io"
+	"time"
 )
 
 type Client struct {
 	c         proto.WebClipboardClient
 	chunkSize int64
 	integrity bool
+	ttl       time.Duration
 }
 
 func New(conn grpc.ClientConnInterface, opts ...Option) *Client {
@@ -26,6 +29,7 @@ func New(conn grpc.ClientConnInterface, opts ...Option) *Client {
 		c:         proto.NewWebClipboardClient(conn),
 		chunkSize: config.chunkSize,
 		integrity: config.integrity,
+		ttl:       config.ttl,
 	}
 }
 
@@ -39,23 +43,27 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 		return err
 	}
 
-	if err := sendInfo(stream, rawUuid, c.chunkSize); err != nil {
+	if err := sendInfo(stream, rawUuid, c.ttl); err != nil {
 		return err
 	}
 
 	hasher := sha256.New()
 	defer hasher.Reset()
 
+	fmt.Println("chunk size", c.chunkSize)
 	buf := make([]byte, c.chunkSize)
 	send := 0
 	for {
-		n, err := r.Read(buf)
+		n, err := io.ReadAtLeast(r, buf, int(c.chunkSize))
 		send += n
 		if err != nil {
-			if err != io.EOF {
-				return err
+			// The error is EOF only if no bytes were read
+			if errors.Is(err, io.EOF) {
+				break
 			}
-			if n > 0 {
+			// If an EOF happens after reading fewer than min bytes,
+			// ReadAtLeast returns ErrUnexpectedEOF
+			if errors.Is(err, io.ErrUnexpectedEOF) {
 				if err := sendChunk(stream, buf[:n]); err != nil {
 					return err
 				}
@@ -64,8 +72,10 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 						return err
 					}
 				}
+				continue
 			}
-			break
+
+			return err
 		}
 		if err := sendChunk(stream, buf[:n]); err != nil {
 			return err
@@ -92,11 +102,11 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 	return nil
 }
 
-func sendInfo(stream proto.WebClipboard_CopyClient, uuid []byte, chunkSize int64) error {
+func sendInfo(stream proto.WebClipboard_CopyClient, uuid []byte, ttl time.Duration) error {
 	return stream.Send(&proto.Payload{Data: &proto.Payload_Info_{
 		Info: &proto.Payload_Info{
-			Uuid:      uuid,
-			ChunkSize: chunkSize,
+			Uuid: uuid,
+			Ttl:  int64(ttl),
 		},
 	}})
 }

@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 )
 
@@ -40,9 +41,9 @@ func (s *serverCmd) run() cli.ActionFunc {
 		defer db.Close()
 
 		srv := server.NewServer(server.Config{TcpAddr: tcpAddr, Db: db})
-		sig := make(chan os.Signal, 2)
+		sig := make(chan os.Signal, 1)
 		srvErr := make(chan error)
-		signal.Notify(sig, os.Interrupt, os.Kill)
+		signal.Notify(sig, os.Interrupt, os.Kill, syscall.SIGTERM)
 
 		go func() {
 			log.Printf("server started on port %d\n", tcpAddr.Port)

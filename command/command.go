@@ -4,6 +4,7 @@ import (
 	crypto "crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"github.com/tigerwill90/webcb/server"
 	"github.com/urfave/cli/v2"
 	"math/rand"
 	"os"
@@ -43,6 +44,10 @@ func Run(args []string) int {
 						Name:  "dev",
 						Usage: "start a wpc server in dev mode",
 					},
+					&cli.Int64Flag{
+						Name:  "grpc-max-receive-size",
+						Value: 200 * 1024 * 1024,
+					},
 				},
 				Action: newServerCmd().run(),
 			},
@@ -64,6 +69,10 @@ func Run(args []string) int {
 					},
 					&cli.BoolFlag{
 						Name: "integrity",
+					},
+					&cli.DurationFlag{
+						Name:  "ttl",
+						Value: server.DefaultTtl,
 					},
 				},
 				Action: newClipboardCmd().run(),

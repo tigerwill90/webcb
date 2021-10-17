@@ -63,7 +63,7 @@ func (s *clipboardCmd) run() cli.ActionFunc {
 		copyErr := make(chan error)
 		signal.Notify(sig, os.Interrupt, os.Kill)
 
-		c := client.New(conn, client.WithChunkSize(chunkSize), client.WithIntegrity(cc.Bool("integrity")))
+		c := client.New(conn, client.WithChunkSize(chunkSize), client.WithIntegrity(cc.Bool("integrity")), client.WithTtl(cc.Duration("ttl")))
 		go func() {
 			copyErr <- c.Copy(copyCtx, bufio.NewReader(os.Stdin))
 		}()
