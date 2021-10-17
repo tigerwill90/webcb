@@ -4,16 +4,29 @@ package proto;
 
 import "google/protobuf/empty.proto";
 
-option go_package = "github.com/tigerwill90/wpc/proto";
+option go_package = "github.com/tigerwill90/webcb/proto";
+
+message Clipboard {
+  bytes uuid = 1;
+  bytes payload = 2;
+  bytes hash = 3;
+  int64 size = 4;
+}
 
 message Payload {
-  oneof data {
+  message Info {
     bytes uuid = 1;
+    int64 chunk_size = 2;
+  }
+
+  oneof data {
+    Info info = 1;
     bytes chunk = 2;
+    bytes hash = 3;
   }
 }
 
-service Web {
+service WebClipboard {
   rpc Copy (stream Payload) returns (google.protobuf.Empty) {}
   rpc Paste (google.protobuf.Empty) returns (stream Payload) {}
 }

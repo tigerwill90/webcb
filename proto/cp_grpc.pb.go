@@ -15,46 +15,46 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-// WebClient is the client API for Web service.
+// WebClipboardClient is the client API for WebClipboard service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type WebClient interface {
-	Copy(ctx context.Context, opts ...grpc.CallOption) (Web_CopyClient, error)
-	Paste(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (Web_PasteClient, error)
+type WebClipboardClient interface {
+	Copy(ctx context.Context, opts ...grpc.CallOption) (WebClipboard_CopyClient, error)
+	Paste(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (WebClipboard_PasteClient, error)
 }
 
-type webClient struct {
+type webClipboardClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewWebClient(cc grpc.ClientConnInterface) WebClient {
-	return &webClient{cc}
+func NewWebClipboardClient(cc grpc.ClientConnInterface) WebClipboardClient {
+	return &webClipboardClient{cc}
 }
 
-func (c *webClient) Copy(ctx context.Context, opts ...grpc.CallOption) (Web_CopyClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Web_ServiceDesc.Streams[0], "/proto.Web/Copy", opts...)
+func (c *webClipboardClient) Copy(ctx context.Context, opts ...grpc.CallOption) (WebClipboard_CopyClient, error) {
+	stream, err := c.cc.NewStream(ctx, &WebClipboard_ServiceDesc.Streams[0], "/proto.WebClipboard/Copy", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &webCopyClient{stream}
+	x := &webClipboardCopyClient{stream}
 	return x, nil
 }
 
-type Web_CopyClient interface {
+type WebClipboard_CopyClient interface {
 	Send(*Payload) error
 	CloseAndRecv() (*emptypb.Empty, error)
 	grpc.ClientStream
 }
 
-type webCopyClient struct {
+type webClipboardCopyClient struct {
 	grpc.ClientStream
 }
 
-func (x *webCopyClient) Send(m *Payload) error {
+func (x *webClipboardCopyClient) Send(m *Payload) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *webCopyClient) CloseAndRecv() (*emptypb.Empty, error) {
+func (x *webClipboardCopyClient) CloseAndRecv() (*emptypb.Empty, error) {
 	if err := x.ClientStream.CloseSend(); err != nil {
 		return nil, err
 	}
@@ -65,12 +65,12 @@ func (x *webCopyClient) CloseAndRecv() (*emptypb.Empty, error) {
 	return m, nil
 }
 
-func (c *webClient) Paste(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (Web_PasteClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Web_ServiceDesc.Streams[1], "/proto.Web/Paste", opts...)
+func (c *webClipboardClient) Paste(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (WebClipboard_PasteClient, error) {
+	stream, err := c.cc.NewStream(ctx, &WebClipboard_ServiceDesc.Streams[1], "/proto.WebClipboard/Paste", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &webPasteClient{stream}
+	x := &webClipboardPasteClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -80,16 +80,16 @@ func (c *webClient) Paste(ctx context.Context, in *emptypb.Empty, opts ...grpc.C
 	return x, nil
 }
 
-type Web_PasteClient interface {
+type WebClipboard_PasteClient interface {
 	Recv() (*Payload, error)
 	grpc.ClientStream
 }
 
-type webPasteClient struct {
+type webClipboardPasteClient struct {
 	grpc.ClientStream
 }
 
-func (x *webPasteClient) Recv() (*Payload, error) {
+func (x *webClipboardPasteClient) Recv() (*Payload, error) {
 	m := new(Payload)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -97,57 +97,57 @@ func (x *webPasteClient) Recv() (*Payload, error) {
 	return m, nil
 }
 
-// WebServer is the server API for Web service.
-// All implementations must embed UnimplementedWebServer
+// WebClipboardServer is the server API for WebClipboard service.
+// All implementations must embed UnimplementedWebClipboardServer
 // for forward compatibility
-type WebServer interface {
-	Copy(Web_CopyServer) error
-	Paste(*emptypb.Empty, Web_PasteServer) error
-	mustEmbedUnimplementedWebServer()
+type WebClipboardServer interface {
+	Copy(WebClipboard_CopyServer) error
+	Paste(*emptypb.Empty, WebClipboard_PasteServer) error
+	mustEmbedUnimplementedWebClipboardServer()
 }
 
-// UnimplementedWebServer must be embedded to have forward compatible implementations.
-type UnimplementedWebServer struct {
+// UnimplementedWebClipboardServer must be embedded to have forward compatible implementations.
+type UnimplementedWebClipboardServer struct {
 }
 
-func (UnimplementedWebServer) Copy(Web_CopyServer) error {
+func (UnimplementedWebClipboardServer) Copy(WebClipboard_CopyServer) error {
 	return status.Errorf(codes.Unimplemented, "method Copy not implemented")
 }
-func (UnimplementedWebServer) Paste(*emptypb.Empty, Web_PasteServer) error {
+func (UnimplementedWebClipboardServer) Paste(*emptypb.Empty, WebClipboard_PasteServer) error {
 	return status.Errorf(codes.Unimplemented, "method Paste not implemented")
 }
-func (UnimplementedWebServer) mustEmbedUnimplementedWebServer() {}
+func (UnimplementedWebClipboardServer) mustEmbedUnimplementedWebClipboardServer() {}
 
-// UnsafeWebServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to WebServer will
+// UnsafeWebClipboardServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to WebClipboardServer will
 // result in compilation errors.
-type UnsafeWebServer interface {
-	mustEmbedUnimplementedWebServer()
+type UnsafeWebClipboardServer interface {
+	mustEmbedUnimplementedWebClipboardServer()
 }
 
-func RegisterWebServer(s grpc.ServiceRegistrar, srv WebServer) {
-	s.RegisterService(&Web_ServiceDesc, srv)
+func RegisterWebClipboardServer(s grpc.ServiceRegistrar, srv WebClipboardServer) {
+	s.RegisterService(&WebClipboard_ServiceDesc, srv)
 }
 
-func _Web_Copy_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(WebServer).Copy(&webCopyServer{stream})
+func _WebClipboard_Copy_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(WebClipboardServer).Copy(&webClipboardCopyServer{stream})
 }
 
-type Web_CopyServer interface {
+type WebClipboard_CopyServer interface {
 	SendAndClose(*emptypb.Empty) error
 	Recv() (*Payload, error)
 	grpc.ServerStream
 }
 
-type webCopyServer struct {
+type webClipboardCopyServer struct {
 	grpc.ServerStream
 }
 
-func (x *webCopyServer) SendAndClose(m *emptypb.Empty) error {
+func (x *webClipboardCopyServer) SendAndClose(m *emptypb.Empty) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *webCopyServer) Recv() (*Payload, error) {
+func (x *webClipboardCopyServer) Recv() (*Payload, error) {
 	m := new(Payload)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -155,43 +155,43 @@ func (x *webCopyServer) Recv() (*Payload, error) {
 	return m, nil
 }
 
-func _Web_Paste_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _WebClipboard_Paste_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(emptypb.Empty)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(WebServer).Paste(m, &webPasteServer{stream})
+	return srv.(WebClipboardServer).Paste(m, &webClipboardPasteServer{stream})
 }
 
-type Web_PasteServer interface {
+type WebClipboard_PasteServer interface {
 	Send(*Payload) error
 	grpc.ServerStream
 }
 
-type webPasteServer struct {
+type webClipboardPasteServer struct {
 	grpc.ServerStream
 }
 
-func (x *webPasteServer) Send(m *Payload) error {
+func (x *webClipboardPasteServer) Send(m *Payload) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-// Web_ServiceDesc is the grpc.ServiceDesc for Web service.
+// WebClipboard_ServiceDesc is the grpc.ServiceDesc for WebClipboard service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var Web_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "proto.Web",
-	HandlerType: (*WebServer)(nil),
+var WebClipboard_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "proto.WebClipboard",
+	HandlerType: (*WebClipboardServer)(nil),
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Copy",
-			Handler:       _Web_Copy_Handler,
+			Handler:       _WebClipboard_Copy_Handler,
 			ClientStreams: true,
 		},
 		{
 			StreamName:    "Paste",
-			Handler:       _Web_Paste_Handler,
+			Handler:       _WebClipboard_Paste_Handler,
 			ServerStreams: true,
 		},
 	},
