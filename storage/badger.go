@@ -1,16 +1,22 @@
 package storage
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/hashicorp/go-hclog"
 	"github.com/oklog/ulid/v2"
 	"io"
 	"math/rand"
-	"strings"
 	"sync"
 	"time"
+)
+
+const (
+	ChunkSize = 64 * 1024
 )
 
 type BadgerConfig struct {
@@ -34,7 +40,59 @@ type BadgerDB struct {
 
 var ErrKeyNotFound = errors.New("key not found")
 
-func (b *BadgerDB) ReadBatch(w io.Writer) (int, error) {
+func (b *BadgerDB) ReadStream() error {
+	var prefix []byte
+	if err := b.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get([]byte("latest"))
+		if err != nil {
+			if errors.Is(err, badger.ErrKeyNotFound) {
+				return ErrKeyNotFound
+			}
+			return err
+		}
+
+		prefix, err = item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	stream := b.db.NewStream()
+
+	stream.NumGo = 16
+	stream.Prefix = prefix
+	stream.LogPrefix = "badger.streaming"
+
+	stream.ChooseKey = func(item *badger.Item) bool {
+		return bytes.HasSuffix(item.Key(), []byte("chunk"))
+	}
+
+	stream.KeyToList = stream.ToList
+
+	stream.Send = func(buf *z.Buffer) error {
+		kvList, err := badger.BufferToKVList(buf)
+		if err != nil {
+			return err
+		}
+		for _, kv := range kvList.GetKv() {
+			fmt.Println(string(kv.GetKey()))
+		}
+		return nil
+	}
+
+	return stream.Orchestrate(context.Background())
+}
+
+type StreamWriter interface {
+	io.Writer
+	LastWrite() error
+	Sum(b []byte) error
+}
+
+func (b *BadgerDB) ReadBatch(w StreamWriter) (int, error) {
 	read := 0
 	err := b.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte("latest"))
@@ -44,7 +102,6 @@ func (b *BadgerDB) ReadBatch(w io.Writer) (int, error) {
 			}
 			return err
 		}
-
 		index, err := item.ValueCopy(nil)
 		if err != nil {
 			return err
@@ -56,11 +113,7 @@ func (b *BadgerDB) ReadBatch(w io.Writer) (int, error) {
 			item := it.Item()
 			k := item.Key()
 			err := item.Value(func(v []byte) error {
-				metadata := strings.SplitN(string(k), "/", 3)
-				if len(metadata) != 3 {
-					return fmt.Errorf("invalid key for index %s", index)
-				}
-				if metadata[2] == "chunk" {
+				if bytes.HasSuffix(k, []byte("chunk")) {
 					valCopy := append(v[:0:0], v...)
 					nw, err := w.Write(valCopy)
 					if err != nil {
@@ -74,7 +127,25 @@ func (b *BadgerDB) ReadBatch(w io.Writer) (int, error) {
 				return err
 			}
 		}
-		return nil
+
+		if err := w.LastWrite(); err != nil {
+			return err
+		}
+
+		hashKey := fmt.Sprintf("%s/sha256/hash", index)
+		item, err = txn.Get([]byte(hashKey))
+		if err != nil {
+			if errors.Is(err, badger.ErrKeyNotFound) {
+				fmt.Println("no hash found")
+				return nil
+			}
+			return err
+		}
+
+		return item.Value(func(v []byte) error {
+			valCopy := append(v[:0:0], v...)
+			return w.Sum(valCopy)
+		})
 	})
 	if err != nil {
 		return 0, err
@@ -82,12 +153,13 @@ func (b *BadgerDB) ReadBatch(w io.Writer) (int, error) {
 	return read, nil
 }
 
-type BatchReader interface {
+type StreamReader interface {
 	io.Reader
 	Sum() []byte
 }
 
-func (b *BadgerDB) WriteBatch(ttl time.Duration, r BatchReader) (int, error) {
+// TODO maybe use io.ReadAtLeast ?
+func (b *BadgerDB) WriteBatch(ttl time.Duration, r StreamReader) (int, error) {
 	buf := make([]byte, b.valueSize)
 	version, err := b.seq.Next()
 	if err != nil {
@@ -105,7 +177,8 @@ func (b *BadgerDB) WriteBatch(ttl time.Duration, r BatchReader) (int, error) {
 			}
 			if nr > 0 {
 				key := fmt.Sprintf("%d/%s/chunk", version, b.mustNewULID())
-				e := badger.NewEntry([]byte(key), buf[:nr])
+				valCopy := append(buf[:0:0], buf[:nr]...)
+				e := badger.NewEntry([]byte(key), valCopy)
 				e.ExpiresAt = uint64(now.Add(ttl).Unix())
 				if err := batch.SetEntry(e); err != nil {
 					return 0, err
@@ -115,7 +188,8 @@ func (b *BadgerDB) WriteBatch(ttl time.Duration, r BatchReader) (int, error) {
 			break
 		}
 		key := fmt.Sprintf("%d/%s/chunk", version, b.mustNewULID())
-		e := badger.NewEntry([]byte(key), buf[:nr])
+		valCopy := append(buf[:0:0], buf[:nr]...)
+		e := badger.NewEntry([]byte(key), valCopy)
 		e.ExpiresAt = uint64(now.Add(ttl).Unix())
 		if err := batch.SetEntry(e); err != nil {
 			return 0, err
@@ -125,7 +199,7 @@ func (b *BadgerDB) WriteBatch(ttl time.Duration, r BatchReader) (int, error) {
 
 	sum := r.Sum()
 	if len(sum) > 0 {
-		key := fmt.Sprintf("%d/%s/hash", version, b.mustNewULID())
+		key := fmt.Sprintf("%d/sha256/hash", version)
 		e := badger.NewEntry([]byte(key), sum)
 		e.ExpiresAt = uint64(now.Add(ttl).Unix())
 		if err := batch.SetEntry(e); err != nil {
@@ -199,6 +273,6 @@ func NewBadgerDB(config *BadgerConfig, logger hclog.Logger) (*BadgerDB, error) {
 		config:     config,
 		entropy:    ulid.Monotonic(rand.New(rand.NewSource(t.Unix())), 0),
 		t:          t,
-		valueSize:  64 * 1024,
+		valueSize:  ChunkSize,
 	}, nil
 }

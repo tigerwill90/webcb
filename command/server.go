@@ -16,6 +16,10 @@ import (
 	"time"
 )
 
+const (
+	defaultGrpcMaxRecvBytes = 200 * 1024 * 1024
+)
+
 type serverCmd struct {
 }
 
@@ -40,7 +44,12 @@ func (s *serverCmd) run() cli.ActionFunc {
 		}
 		defer db.Close()
 
-		srv := server.NewServer(server.Config{TcpAddr: tcpAddr, Db: db})
+		grpcMaxRecvBytes := cc.Int("grpc-max-receive-bytes")
+		if grpcMaxRecvBytes == 0 {
+			grpcMaxRecvBytes = defaultGrpcMaxRecvBytes
+		}
+
+		srv := server.NewServer(server.Config{TcpAddr: tcpAddr, Db: db, GrpcMaxRecvSize: grpcMaxRecvBytes})
 		sig := make(chan os.Signal, 1)
 		srvErr := make(chan error)
 		signal.Notify(sig, os.Interrupt, os.Kill, syscall.SIGTERM)

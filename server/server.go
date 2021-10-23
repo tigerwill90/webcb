@@ -14,12 +14,13 @@ type Server struct {
 }
 
 type Config struct {
-	TcpAddr *net.TCPAddr
-	Db      *storage.BadgerDB
+	TcpAddr         *net.TCPAddr
+	Db              *storage.BadgerDB
+	GrpcMaxRecvSize int
 }
 
 func NewServer(config Config) *Server {
-	srv := grpc.NewServer(grpc.MaxRecvMsgSize(200 * 1024 * 1024))
+	srv := grpc.NewServer(grpc.MaxRecvMsgSize(config.GrpcMaxRecvSize))
 	proto.RegisterWebClipboardServer(srv, &webClipboardService{
 		db: config.Db,
 	})

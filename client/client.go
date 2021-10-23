@@ -1,11 +1,11 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/tigerwill90/webcb/proto"
 	"google.golang.org/grpc"
 	"io"
@@ -15,7 +15,7 @@ import (
 type Client struct {
 	c         proto.WebClipboardClient
 	chunkSize int64
-	integrity bool
+	checksum  bool
 	ttl       time.Duration
 }
 
@@ -28,7 +28,7 @@ func New(conn grpc.ClientConnInterface, opts ...Option) *Client {
 	return &Client{
 		c:         proto.NewWebClipboardClient(conn),
 		chunkSize: config.chunkSize,
-		integrity: config.integrity,
+		checksum:  config.checksum,
 		ttl:       config.ttl,
 	}
 }
@@ -38,12 +38,8 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	rawUuid, err := uuid.New().MarshalBinary()
-	if err != nil {
-		return err
-	}
 
-	if err := sendInfo(stream, rawUuid, c.ttl); err != nil {
+	if err := sendInfo(stream, c.ttl); err != nil {
 		return err
 	}
 
@@ -67,7 +63,7 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 				if err := sendChunk(stream, buf[:n]); err != nil {
 					return err
 				}
-				if c.integrity {
+				if c.checksum {
 					if _, err := hasher.Write(buf[:n]); err != nil {
 						return err
 					}
@@ -80,7 +76,7 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 		if err := sendChunk(stream, buf[:n]); err != nil {
 			return err
 		}
-		if c.integrity {
+		if c.checksum {
 			if _, err := hasher.Write(buf[:n]); err != nil {
 				return err
 			}
@@ -89,7 +85,7 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 
 	fmt.Println("bytes sent", send)
 
-	if c.integrity {
+	if c.checksum {
 		if err := sendHash(stream, hasher.Sum(nil)); err != nil {
 			return err
 		}
@@ -102,23 +98,71 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 	return nil
 }
 
-func sendInfo(stream proto.WebClipboard_CopyClient, uuid []byte, ttl time.Duration) error {
-	return stream.Send(&proto.Payload{Data: &proto.Payload_Info_{
-		Info: &proto.Payload_Info{
-			Uuid: uuid,
-			Ttl:  int64(ttl),
+func (c *Client) Paste(ctx context.Context, w io.Writer) error {
+	resp, err := c.c.Paste(ctx, &proto.PasteOption{Length: c.chunkSize}, grpc.MaxCallRecvMsgSize(int(c.chunkSize+1000)))
+	if err != nil {
+		return err
+	}
+	hasher := sha256.New()
+	defer hasher.Reset()
+	received := 0
+	var hashIntegrity []byte
+	for {
+		stream, err := resp.Recv()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+
+		switch stream.Data.(type) {
+		case *proto.Stream_Info_:
+			return errors.New("protocol error: chunk stream expected but get info header")
+		case *proto.Stream_Chunk:
+			chunk := stream.GetChunk()
+			if c.checksum {
+				if _, err := hasher.Write(chunk); err != nil {
+					return err
+				}
+			}
+			if _, err := w.Write(chunk); err != nil {
+				return err
+			}
+			received += len(chunk)
+		case *proto.Stream_Hash:
+			hashIntegrity = stream.GetHash()
+		}
+	}
+	if c.checksum {
+		if len(hashIntegrity) != sha256.Size {
+			return errors.New("invalid sha256 size")
+		}
+		if n := bytes.Compare(hashIntegrity, hasher.Sum(nil)); n != 0 {
+			return errors.New("checksum failed")
+		}
+	}
+
+	fmt.Println("rcv", received)
+	return nil
+}
+
+func sendInfo(stream proto.WebClipboard_CopyClient, ttl time.Duration) error {
+	return stream.Send(&proto.Stream{Data: &proto.Stream_Info_{
+		Info: &proto.Stream_Info{
+			Ttl: int64(ttl),
 		},
 	}})
 }
 
 func sendChunk(stream proto.WebClipboard_CopyClient, chunk []byte) error {
-	return stream.Send(&proto.Payload{Data: &proto.Payload_Chunk{
+	return stream.Send(&proto.Stream{Data: &proto.Stream_Chunk{
 		Chunk: chunk,
 	}})
 }
 
 func sendHash(stream proto.WebClipboard_CopyClient, sum []byte) error {
-	return stream.Send(&proto.Payload{Data: &proto.Payload_Hash{
+	return stream.Send(&proto.Stream{Data: &proto.Stream_Hash{
 		Hash: sum,
 	}})
 }

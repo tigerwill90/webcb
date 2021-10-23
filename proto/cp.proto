@@ -6,22 +6,13 @@ import "google/protobuf/empty.proto";
 
 option go_package = "github.com/tigerwill90/webcb/proto";
 
-message Clipboard {
-  bytes uuid = 1;
-  bytes payload = 2;
-  bytes hash = 3;
-  int64 size = 4;
-}
-
 message PasteOption {
   int64 length = 1;
 }
 
-message Payload {
+message Stream {
   message Info {
-    // TODO remove this
-    bytes uuid = 1;
-    int64 ttl = 2;
+    int64 ttl = 1;
   }
 
   oneof data {
@@ -32,6 +23,6 @@ message Payload {
 }
 
 service WebClipboard {
-  rpc Copy (stream Payload) returns (google.protobuf.Empty) {}
-  rpc Paste (PasteOption) returns (stream Payload) {}
+  rpc Copy (stream Stream) returns (google.protobuf.Empty) {}
+  rpc Paste (PasteOption) returns (stream Stream) {}
 }

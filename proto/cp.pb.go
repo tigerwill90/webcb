@@ -26,77 +26,6 @@ const (
 // of the legacy proto package is being used.
 const _ = proto.ProtoPackageIsVersion4
 
-type Clipboard struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Uuid    []byte `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
-	Payload []byte `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
-	Hash    []byte `protobuf:"bytes,3,opt,name=hash,proto3" json:"hash,omitempty"`
-	Size    int64  `protobuf:"varint,4,opt,name=size,proto3" json:"size,omitempty"`
-}
-
-func (x *Clipboard) Reset() {
-	*x = Clipboard{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_cp_proto_msgTypes[0]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Clipboard) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Clipboard) ProtoMessage() {}
-
-func (x *Clipboard) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_cp_proto_msgTypes[0]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Clipboard.ProtoReflect.Descriptor instead.
-func (*Clipboard) Descriptor() ([]byte, []int) {
-	return file_proto_cp_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *Clipboard) GetUuid() []byte {
-	if x != nil {
-		return x.Uuid
-	}
-	return nil
-}
-
-func (x *Clipboard) GetPayload() []byte {
-	if x != nil {
-		return x.Payload
-	}
-	return nil
-}
-
-func (x *Clipboard) GetHash() []byte {
-	if x != nil {
-		return x.Hash
-	}
-	return nil
-}
-
-func (x *Clipboard) GetSize() int64 {
-	if x != nil {
-		return x.Size
-	}
-	return 0
-}
-
 type PasteOption struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -108,7 +37,7 @@ type PasteOption struct {
 func (x *PasteOption) Reset() {
 	*x = PasteOption{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_cp_proto_msgTypes[1]
+		mi := &file_proto_cp_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -121,7 +50,7 @@ func (x *PasteOption) String() string {
 func (*PasteOption) ProtoMessage() {}
 
 func (x *PasteOption) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_cp_proto_msgTypes[1]
+	mi := &file_proto_cp_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -134,7 +63,7 @@ func (x *PasteOption) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PasteOption.ProtoReflect.Descriptor instead.
 func (*PasteOption) Descriptor() ([]byte, []int) {
-	return file_proto_cp_proto_rawDescGZIP(), []int{1}
+	return file_proto_cp_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *PasteOption) GetLength() int64 {
@@ -144,20 +73,110 @@ func (x *PasteOption) GetLength() int64 {
 	return 0
 }
 
-type Payload struct {
+type Stream struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Data:
-	//	*Payload_Info_
-	//	*Payload_Chunk
-	//	*Payload_Hash
-	Data isPayload_Data `protobuf_oneof:"data"`
+	//	*Stream_Info_
+	//	*Stream_Chunk
+	//	*Stream_Hash
+	Data isStream_Data `protobuf_oneof:"data"`
 }
 
-func (x *Payload) Reset() {
-	*x = Payload{}
+func (x *Stream) Reset() {
+	*x = Stream{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_cp_proto_msgTypes[1]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Stream) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Stream) ProtoMessage() {}
+
+func (x *Stream) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_cp_proto_msgTypes[1]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Stream.ProtoReflect.Descriptor instead.
+func (*Stream) Descriptor() ([]byte, []int) {
+	return file_proto_cp_proto_rawDescGZIP(), []int{1}
+}
+
+func (m *Stream) GetData() isStream_Data {
+	if m != nil {
+		return m.Data
+	}
+	return nil
+}
+
+func (x *Stream) GetInfo() *Stream_Info {
+	if x, ok := x.GetData().(*Stream_Info_); ok {
+		return x.Info
+	}
+	return nil
+}
+
+func (x *Stream) GetChunk() []byte {
+	if x, ok := x.GetData().(*Stream_Chunk); ok {
+		return x.Chunk
+	}
+	return nil
+}
+
+func (x *Stream) GetHash() []byte {
+	if x, ok := x.GetData().(*Stream_Hash); ok {
+		return x.Hash
+	}
+	return nil
+}
+
+type isStream_Data interface {
+	isStream_Data()
+}
+
+type Stream_Info_ struct {
+	Info *Stream_Info `protobuf:"bytes,1,opt,name=info,proto3,oneof"`
+}
+
+type Stream_Chunk struct {
+	Chunk []byte `protobuf:"bytes,2,opt,name=chunk,proto3,oneof"`
+}
+
+type Stream_Hash struct {
+	Hash []byte `protobuf:"bytes,3,opt,name=hash,proto3,oneof"`
+}
+
+func (*Stream_Info_) isStream_Data() {}
+
+func (*Stream_Chunk) isStream_Data() {}
+
+func (*Stream_Hash) isStream_Data() {}
+
+type Stream_Info struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Ttl int64 `protobuf:"varint,1,opt,name=ttl,proto3" json:"ttl,omitempty"`
+}
+
+func (x *Stream_Info) Reset() {
+	*x = Stream_Info{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_proto_cp_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -165,13 +184,13 @@ func (x *Payload) Reset() {
 	}
 }
 
-func (x *Payload) String() string {
+func (x *Stream_Info) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Payload) ProtoMessage() {}
+func (*Stream_Info) ProtoMessage() {}
 
-func (x *Payload) ProtoReflect() protoreflect.Message {
+func (x *Stream_Info) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_cp_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -183,111 +202,12 @@ func (x *Payload) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Payload.ProtoReflect.Descriptor instead.
-func (*Payload) Descriptor() ([]byte, []int) {
-	return file_proto_cp_proto_rawDescGZIP(), []int{2}
+// Deprecated: Use Stream_Info.ProtoReflect.Descriptor instead.
+func (*Stream_Info) Descriptor() ([]byte, []int) {
+	return file_proto_cp_proto_rawDescGZIP(), []int{1, 0}
 }
 
-func (m *Payload) GetData() isPayload_Data {
-	if m != nil {
-		return m.Data
-	}
-	return nil
-}
-
-func (x *Payload) GetInfo() *Payload_Info {
-	if x, ok := x.GetData().(*Payload_Info_); ok {
-		return x.Info
-	}
-	return nil
-}
-
-func (x *Payload) GetChunk() []byte {
-	if x, ok := x.GetData().(*Payload_Chunk); ok {
-		return x.Chunk
-	}
-	return nil
-}
-
-func (x *Payload) GetHash() []byte {
-	if x, ok := x.GetData().(*Payload_Hash); ok {
-		return x.Hash
-	}
-	return nil
-}
-
-type isPayload_Data interface {
-	isPayload_Data()
-}
-
-type Payload_Info_ struct {
-	Info *Payload_Info `protobuf:"bytes,1,opt,name=info,proto3,oneof"`
-}
-
-type Payload_Chunk struct {
-	Chunk []byte `protobuf:"bytes,2,opt,name=chunk,proto3,oneof"`
-}
-
-type Payload_Hash struct {
-	Hash []byte `protobuf:"bytes,3,opt,name=hash,proto3,oneof"`
-}
-
-func (*Payload_Info_) isPayload_Data() {}
-
-func (*Payload_Chunk) isPayload_Data() {}
-
-func (*Payload_Hash) isPayload_Data() {}
-
-type Payload_Info struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	// TODO remove this
-	Uuid []byte `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
-	Ttl  int64  `protobuf:"varint,2,opt,name=ttl,proto3" json:"ttl,omitempty"`
-}
-
-func (x *Payload_Info) Reset() {
-	*x = Payload_Info{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_cp_proto_msgTypes[3]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Payload_Info) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Payload_Info) ProtoMessage() {}
-
-func (x *Payload_Info) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_cp_proto_msgTypes[3]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Payload_Info.ProtoReflect.Descriptor instead.
-func (*Payload_Info) Descriptor() ([]byte, []int) {
-	return file_proto_cp_proto_rawDescGZIP(), []int{2, 0}
-}
-
-func (x *Payload_Info) GetUuid() []byte {
-	if x != nil {
-		return x.Uuid
-	}
-	return nil
-}
-
-func (x *Payload_Info) GetTtl() int64 {
+func (x *Stream_Info) GetTtl() int64 {
 	if x != nil {
 		return x.Ttl
 	}
@@ -300,35 +220,28 @@ var file_proto_cp_proto_rawDesc = []byte{
 	0x0a, 0x0e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x63, 0x70, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
 	0x12, 0x05, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x1a, 0x1b, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2f,
 	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2f, 0x65, 0x6d, 0x70, 0x74, 0x79, 0x2e, 0x70,
-	0x72, 0x6f, 0x74, 0x6f, 0x22, 0x61, 0x0a, 0x09, 0x43, 0x6c, 0x69, 0x70, 0x62, 0x6f, 0x61, 0x72,
-	0x64, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52,
-	0x04, 0x75, 0x75, 0x69, 0x64, 0x12, 0x18, 0x0a, 0x07, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64,
-	0x18, 0x02, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x07, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x12,
-	0x12, 0x0a, 0x04, 0x68, 0x61, 0x73, 0x68, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x04, 0x68,
-	0x61, 0x73, 0x68, 0x12, 0x12, 0x0a, 0x04, 0x73, 0x69, 0x7a, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28,
-	0x03, 0x52, 0x04, 0x73, 0x69, 0x7a, 0x65, 0x22, 0x25, 0x0a, 0x0b, 0x50, 0x61, 0x73, 0x74, 0x65,
-	0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x16, 0x0a, 0x06, 0x6c, 0x65, 0x6e, 0x67, 0x74, 0x68,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x06, 0x6c, 0x65, 0x6e, 0x67, 0x74, 0x68, 0x22, 0x98,
-	0x01, 0x0a, 0x07, 0x50, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x12, 0x29, 0x0a, 0x04, 0x69, 0x6e,
-	0x66, 0x6f, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x13, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x2e, 0x50, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x2e, 0x49, 0x6e, 0x66, 0x6f, 0x48, 0x00, 0x52,
-	0x04, 0x69, 0x6e, 0x66, 0x6f, 0x12, 0x16, 0x0a, 0x05, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x18, 0x02,
-	0x20, 0x01, 0x28, 0x0c, 0x48, 0x00, 0x52, 0x05, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x12, 0x14, 0x0a,
-	0x04, 0x68, 0x61, 0x73, 0x68, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x48, 0x00, 0x52, 0x04, 0x68,
-	0x61, 0x73, 0x68, 0x1a, 0x2c, 0x0a, 0x04, 0x49, 0x6e, 0x66, 0x6f, 0x12, 0x12, 0x0a, 0x04, 0x75,
-	0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x12,
-	0x10, 0x0a, 0x03, 0x74, 0x74, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x03, 0x74, 0x74,
-	0x6c, 0x42, 0x06, 0x0a, 0x04, 0x64, 0x61, 0x74, 0x61, 0x32, 0x73, 0x0a, 0x0c, 0x57, 0x65, 0x62,
-	0x43, 0x6c, 0x69, 0x70, 0x62, 0x6f, 0x61, 0x72, 0x64, 0x12, 0x32, 0x0a, 0x04, 0x43, 0x6f, 0x70,
-	0x79, 0x12, 0x0e, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x50, 0x61, 0x79, 0x6c, 0x6f, 0x61,
-	0x64, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x22, 0x00, 0x28, 0x01, 0x12, 0x2f, 0x0a,
-	0x05, 0x50, 0x61, 0x73, 0x74, 0x65, 0x12, 0x12, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x50,
-	0x61, 0x73, 0x74, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x1a, 0x0e, 0x2e, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x2e, 0x50, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x22, 0x00, 0x30, 0x01, 0x42, 0x24,
-	0x5a, 0x22, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x74, 0x69, 0x67,
-	0x65, 0x72, 0x77, 0x69, 0x6c, 0x6c, 0x39, 0x30, 0x2f, 0x77, 0x65, 0x62, 0x63, 0x62, 0x2f, 0x70,
-	0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x72, 0x6f, 0x74, 0x6f, 0x22, 0x25, 0x0a, 0x0b, 0x50, 0x61, 0x73, 0x74, 0x65, 0x4f, 0x70, 0x74,
+	0x69, 0x6f, 0x6e, 0x12, 0x16, 0x0a, 0x06, 0x6c, 0x65, 0x6e, 0x67, 0x74, 0x68, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x03, 0x52, 0x06, 0x6c, 0x65, 0x6e, 0x67, 0x74, 0x68, 0x22, 0x82, 0x01, 0x0a, 0x06,
+	0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x12, 0x28, 0x0a, 0x04, 0x69, 0x6e, 0x66, 0x6f, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x53, 0x74, 0x72,
+	0x65, 0x61, 0x6d, 0x2e, 0x49, 0x6e, 0x66, 0x6f, 0x48, 0x00, 0x52, 0x04, 0x69, 0x6e, 0x66, 0x6f,
+	0x12, 0x16, 0x0a, 0x05, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0c, 0x48,
+	0x00, 0x52, 0x05, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x12, 0x14, 0x0a, 0x04, 0x68, 0x61, 0x73, 0x68,
+	0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x48, 0x00, 0x52, 0x04, 0x68, 0x61, 0x73, 0x68, 0x1a, 0x18,
+	0x0a, 0x04, 0x49, 0x6e, 0x66, 0x6f, 0x12, 0x10, 0x0a, 0x03, 0x74, 0x74, 0x6c, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x03, 0x52, 0x03, 0x74, 0x74, 0x6c, 0x42, 0x06, 0x0a, 0x04, 0x64, 0x61, 0x74, 0x61,
+	0x32, 0x71, 0x0a, 0x0c, 0x57, 0x65, 0x62, 0x43, 0x6c, 0x69, 0x70, 0x62, 0x6f, 0x61, 0x72, 0x64,
+	0x12, 0x31, 0x0a, 0x04, 0x43, 0x6f, 0x70, 0x79, 0x12, 0x0d, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x2e, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65,
+	0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x22,
+	0x00, 0x28, 0x01, 0x12, 0x2e, 0x0a, 0x05, 0x50, 0x61, 0x73, 0x74, 0x65, 0x12, 0x12, 0x2e, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x50, 0x61, 0x73, 0x74, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e,
+	0x1a, 0x0d, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x22,
+	0x00, 0x30, 0x01, 0x42, 0x24, 0x5a, 0x22, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f,
+	0x6d, 0x2f, 0x74, 0x69, 0x67, 0x65, 0x72, 0x77, 0x69, 0x6c, 0x6c, 0x39, 0x30, 0x2f, 0x77, 0x65,
+	0x62, 0x63, 0x62, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x33,
 }
 
 var (
@@ -343,20 +256,19 @@ func file_proto_cp_proto_rawDescGZIP() []byte {
 	return file_proto_cp_proto_rawDescData
 }
 
-var file_proto_cp_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_proto_cp_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_proto_cp_proto_goTypes = []interface{}{
-	(*Clipboard)(nil),     // 0: proto.Clipboard
-	(*PasteOption)(nil),   // 1: proto.PasteOption
-	(*Payload)(nil),       // 2: proto.Payload
-	(*Payload_Info)(nil),  // 3: proto.Payload.Info
-	(*emptypb.Empty)(nil), // 4: google.protobuf.Empty
+	(*PasteOption)(nil),   // 0: proto.PasteOption
+	(*Stream)(nil),        // 1: proto.Stream
+	(*Stream_Info)(nil),   // 2: proto.Stream.Info
+	(*emptypb.Empty)(nil), // 3: google.protobuf.Empty
 }
 var file_proto_cp_proto_depIdxs = []int32{
-	3, // 0: proto.Payload.info:type_name -> proto.Payload.Info
-	2, // 1: proto.WebClipboard.Copy:input_type -> proto.Payload
-	1, // 2: proto.WebClipboard.Paste:input_type -> proto.PasteOption
-	4, // 3: proto.WebClipboard.Copy:output_type -> google.protobuf.Empty
-	2, // 4: proto.WebClipboard.Paste:output_type -> proto.Payload
+	2, // 0: proto.Stream.info:type_name -> proto.Stream.Info
+	1, // 1: proto.WebClipboard.Copy:input_type -> proto.Stream
+	0, // 2: proto.WebClipboard.Paste:input_type -> proto.PasteOption
+	3, // 3: proto.WebClipboard.Copy:output_type -> google.protobuf.Empty
+	1, // 4: proto.WebClipboard.Paste:output_type -> proto.Stream
 	3, // [3:5] is the sub-list for method output_type
 	1, // [1:3] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
@@ -371,18 +283,6 @@ func file_proto_cp_proto_init() {
 	}
 	if !protoimpl.UnsafeEnabled {
 		file_proto_cp_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Clipboard); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_proto_cp_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*PasteOption); i {
 			case 0:
 				return &v.state
@@ -394,8 +294,8 @@ func file_proto_cp_proto_init() {
 				return nil
 			}
 		}
-		file_proto_cp_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Payload); i {
+		file_proto_cp_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Stream); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -406,8 +306,8 @@ func file_proto_cp_proto_init() {
 				return nil
 			}
 		}
-		file_proto_cp_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Payload_Info); i {
+		file_proto_cp_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Stream_Info); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -419,10 +319,10 @@ func file_proto_cp_proto_init() {
 			}
 		}
 	}
-	file_proto_cp_proto_msgTypes[2].OneofWrappers = []interface{}{
-		(*Payload_Info_)(nil),
-		(*Payload_Chunk)(nil),
-		(*Payload_Hash)(nil),
+	file_proto_cp_proto_msgTypes[1].OneofWrappers = []interface{}{
+		(*Stream_Info_)(nil),
+		(*Stream_Chunk)(nil),
+		(*Stream_Hash)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -430,7 +330,7 @@ func file_proto_cp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_proto_cp_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

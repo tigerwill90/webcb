@@ -24,6 +24,7 @@ func Run(args []string) int {
 		Name:        "webcb",
 		Usage:       "the web clipboard",
 		Description: "Clipboard copy/paste over internet",
+		Version:     "v0.0.0",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "host",
@@ -44,16 +45,16 @@ func Run(args []string) int {
 						Name:  "dev",
 						Usage: "start a wpc server in dev mode",
 					},
-					&cli.Int64Flag{
-						Name:  "grpc-max-receive-size",
-						Value: 200 * 1024 * 1024,
+					&cli.IntFlag{
+						Name:  "grpc-max-receive-bytes",
+						Value: defaultGrpcMaxRecvBytes,
 					},
 				},
 				Action: newServerCmd().run(),
 			},
 			{
 				Name:    "copy",
-				Aliases: []string{"cp"},
+				Aliases: []string{"c"},
 				Usage:   "copy to web clipboard",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
@@ -61,21 +62,53 @@ func Run(args []string) int {
 						Value: "1048576b",
 					},
 					&cli.DurationFlag{
-						Name: "timeout",
+						Name:        "timeout",
+						DefaultText: "0s - no timeout",
 					},
 					&cli.DurationFlag{
-						Name:  "client-timeout",
-						Value: defaultClientTimeout,
+						Name:  "conn-timeout",
+						Value: defaultClientConnTimeout,
 					},
 					&cli.BoolFlag{
-						Name: "integrity",
+						Name:    "checksum",
+						Aliases: []string{"sum"},
 					},
 					&cli.DurationFlag{
 						Name:  "ttl",
 						Value: server.DefaultTtl,
 					},
+					&cli.BoolFlag{
+						Name: "verbose",
+					},
 				},
-				Action: newClipboardCmd().run(),
+				Action: newCopyCommand().run(),
+			},
+			{
+				Name:    "paste",
+				Aliases: []string{"p"},
+				Usage:   "paste from web clipboard",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "size",
+						Value: "1048576b",
+					},
+					&cli.DurationFlag{
+						Name:        "timeout",
+						DefaultText: "0s - no timeout",
+					},
+					&cli.DurationFlag{
+						Name:  "conn-timeout",
+						Value: defaultClientConnTimeout,
+					},
+					&cli.BoolFlag{
+						Name:    "checksum",
+						Aliases: []string{"sum"},
+					},
+					&cli.BoolFlag{
+						Name: "verbose",
+					},
+				},
+				Action: newPasteCommand().run(),
 			},
 		},
 	}

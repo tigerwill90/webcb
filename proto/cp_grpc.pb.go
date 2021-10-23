@@ -41,7 +41,7 @@ func (c *webClipboardClient) Copy(ctx context.Context, opts ...grpc.CallOption) 
 }
 
 type WebClipboard_CopyClient interface {
-	Send(*Payload) error
+	Send(*Stream) error
 	CloseAndRecv() (*emptypb.Empty, error)
 	grpc.ClientStream
 }
@@ -50,7 +50,7 @@ type webClipboardCopyClient struct {
 	grpc.ClientStream
 }
 
-func (x *webClipboardCopyClient) Send(m *Payload) error {
+func (x *webClipboardCopyClient) Send(m *Stream) error {
 	return x.ClientStream.SendMsg(m)
 }
 
@@ -81,7 +81,7 @@ func (c *webClipboardClient) Paste(ctx context.Context, in *PasteOption, opts ..
 }
 
 type WebClipboard_PasteClient interface {
-	Recv() (*Payload, error)
+	Recv() (*Stream, error)
 	grpc.ClientStream
 }
 
@@ -89,8 +89,8 @@ type webClipboardPasteClient struct {
 	grpc.ClientStream
 }
 
-func (x *webClipboardPasteClient) Recv() (*Payload, error) {
-	m := new(Payload)
+func (x *webClipboardPasteClient) Recv() (*Stream, error) {
+	m := new(Stream)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func _WebClipboard_Copy_Handler(srv interface{}, stream grpc.ServerStream) error
 
 type WebClipboard_CopyServer interface {
 	SendAndClose(*emptypb.Empty) error
-	Recv() (*Payload, error)
+	Recv() (*Stream, error)
 	grpc.ServerStream
 }
 
@@ -147,8 +147,8 @@ func (x *webClipboardCopyServer) SendAndClose(m *emptypb.Empty) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *webClipboardCopyServer) Recv() (*Payload, error) {
-	m := new(Payload)
+func (x *webClipboardCopyServer) Recv() (*Stream, error) {
+	m := new(Stream)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -164,7 +164,7 @@ func _WebClipboard_Paste_Handler(srv interface{}, stream grpc.ServerStream) erro
 }
 
 type WebClipboard_PasteServer interface {
-	Send(*Payload) error
+	Send(*Stream) error
 	grpc.ServerStream
 }
 
@@ -172,7 +172,7 @@ type webClipboardPasteServer struct {
 	grpc.ServerStream
 }
 
-func (x *webClipboardPasteServer) Send(m *Payload) error {
+func (x *webClipboardPasteServer) Send(m *Stream) error {
 	return x.ServerStream.SendMsg(m)
 }
 

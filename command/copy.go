@@ -16,16 +16,16 @@ import (
 	"time"
 )
 
-type clipboardCmd struct {
+type copyCmd struct {
 }
 
-func newClipboardCmd() *clipboardCmd {
-	return &clipboardCmd{}
+func newCopyCommand() *copyCmd {
+	return &copyCmd{}
 }
 
-const defaultClientTimeout = 5 * time.Second
+const defaultClientConnTimeout = 5 * time.Second
 
-func (s *clipboardCmd) run() cli.ActionFunc {
+func (s *copyCmd) run() cli.ActionFunc {
 	return func(cc *cli.Context) error {
 		tcpAddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(cc.String("host"), strconv.FormatUint(cc.Uint64("port"), 10)))
 		if err != nil {
@@ -37,12 +37,12 @@ func (s *clipboardCmd) run() cli.ActionFunc {
 			return err
 		}
 
-		clientTimeout := cc.Duration("client-timeout")
-		if clientTimeout == 0 {
-			clientTimeout = defaultClientTimeout
+		connTimeout := cc.Duration("conn-timeout")
+		if connTimeout == 0 {
+			connTimeout = defaultClientConnTimeout
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), connTimeout)
 		defer cancel()
 		conn, err := grpc.DialContext(ctx, tcpAddr.String(), grpc.WithInsecure(), grpc.WithBlock())
 		if err != nil {
@@ -63,7 +63,7 @@ func (s *clipboardCmd) run() cli.ActionFunc {
 		copyErr := make(chan error)
 		signal.Notify(sig, os.Interrupt, os.Kill)
 
-		c := client.New(conn, client.WithChunkSize(chunkSize), client.WithIntegrity(cc.Bool("integrity")), client.WithTtl(cc.Duration("ttl")))
+		c := client.New(conn, client.WithChunkSize(chunkSize), client.WithChecksum(cc.Bool("checksum")), client.WithTtl(cc.Duration("ttl")))
 		go func() {
 			copyErr <- c.Copy(copyCtx, bufio.NewReader(os.Stdin))
 		}()

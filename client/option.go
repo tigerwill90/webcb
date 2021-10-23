@@ -7,7 +7,7 @@ import (
 
 type config struct {
 	chunkSize int64
-	integrity bool
+	checksum  bool
 	ttl       time.Duration
 }
 
@@ -28,9 +28,9 @@ func WithChunkSize(n int64) Option {
 	}
 }
 
-func WithIntegrity(enable bool) Option {
+func WithChecksum(enable bool) Option {
 	return func(c *config) {
-		c.integrity = enable
+		c.checksum = enable
 	}
 }
 
