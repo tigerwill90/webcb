@@ -30,12 +30,13 @@ func (s *webClipboardService) Copy(server proto.WebClipboard_CopyServer) error {
 		return errors.New("protocol error: expected an info header but get a chunk stream")
 	}
 
-	if fi.Ttl == 0 {
-		fi.Ttl = int64(DefaultTtl)
+	ttl := time.Duration(fi.Ttl)
+	if ttl == 0 {
+		ttl = DefaultTtl
 	}
 
 	r := NewGrpcReader(server)
-	n, err := s.db.WriteBatch(time.Duration(fi.Ttl), r)
+	n, err := s.db.WriteBatch(ttl, r)
 	if err != nil {
 		return err
 	}

@@ -34,11 +34,13 @@ func (s *serverCmd) run() cli.ActionFunc {
 			return err
 		}
 
+		dbLogger := hclog.New(hclog.DefaultOptions).Named("db")
+		dbLogger.SetLevel(hclog.Trace)
 		db, err := storage.NewBadgerDB(&storage.BadgerConfig{
 			InMemory:   false,
-			GcInterval: 5 * time.Minute,
+			GcInterval: 1 * time.Minute,
 			Path:       "store",
-		}, hclog.New(hclog.DefaultOptions).Named("db"))
+		}, dbLogger)
 		if err != nil {
 			return err
 		}
