@@ -34,12 +34,17 @@ func (s *serverCmd) run() cli.ActionFunc {
 			return err
 		}
 
+		gcInterval := cc.Duration("gc-interval")
+		if gcInterval < storage.MinGcDuration {
+			gcInterval = storage.MinGcDuration
+		}
+
 		dbLogger := hclog.New(hclog.DefaultOptions).Named("db")
 		dbLogger.SetLevel(hclog.Trace)
 		db, err := storage.NewBadgerDB(&storage.BadgerConfig{
 			InMemory:   false,
-			GcInterval: 1 * time.Minute,
-			Path:       "store",
+			GcInterval: gcInterval,
+			Path:       cc.String("path"),
 		}, dbLogger)
 		if err != nil {
 			return err

@@ -8,6 +8,7 @@ import (
 	"github.com/urfave/cli/v2"
 	"math/rand"
 	"os"
+	"time"
 )
 
 func init() {
@@ -48,6 +49,14 @@ func Run(args []string) int {
 					&cli.IntFlag{
 						Name:  "grpc-max-receive-bytes",
 						Value: defaultGrpcMaxRecvBytes,
+					},
+					&cli.DurationFlag{
+						Name:  "gc-interval",
+						Value: 5 * time.Minute,
+					},
+					&cli.StringFlag{
+						Name:  "path",
+						Value: "db",
 					},
 				},
 				Action: newServerCmd().run(),
