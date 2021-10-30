@@ -63,7 +63,7 @@ func (s *copyCmd) run() cli.ActionFunc {
 		copyErr := make(chan error)
 		signal.Notify(sig, os.Interrupt, os.Kill)
 
-		c := client.New(conn, client.WithChunkSize(chunkSize), client.WithChecksum(cc.Bool("checksum")), client.WithTtl(cc.Duration("ttl")))
+		c := client.New(conn, client.WithChunkSize(chunkSize), client.WithChecksum(cc.Bool("checksum")), client.WithTtl(cc.Duration("ttl")), client.WithCompression(cc.Bool("compress")))
 		go func() {
 			copyErr <- c.Copy(copyCtx, bufio.NewReader(os.Stdin))
 		}()

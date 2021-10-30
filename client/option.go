@@ -6,9 +6,10 @@ import (
 )
 
 type config struct {
-	chunkSize int64
-	checksum  bool
-	ttl       time.Duration
+	chunkSize   int64
+	checksum    bool
+	ttl         time.Duration
+	compression bool
 }
 
 func defaultConfig() *config {
@@ -39,5 +40,11 @@ func WithTtl(d time.Duration) Option {
 		if d > 0 {
 			c.ttl = d
 		}
+	}
+}
+
+func WithCompression(enable bool) Option {
+	return func(c *config) {
+		c.compression = enable
 	}
 }

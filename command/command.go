@@ -29,7 +29,7 @@ func Run(args []string) int {
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "host",
-				Value: "127.0.0.1",
+				Value: "0.0.0.0",
 			},
 			&cli.Uint64Flag{
 				Name:  "port",
@@ -89,6 +89,9 @@ func Run(args []string) int {
 					&cli.BoolFlag{
 						Name: "verbose",
 					},
+					&cli.BoolFlag{
+						Name: "compress",
+					},
 				},
 				Action: newCopyCommand().run(),
 			},
@@ -110,14 +113,24 @@ func Run(args []string) int {
 						Value: defaultClientConnTimeout,
 					},
 					&cli.BoolFlag{
-						Name:    "checksum",
-						Aliases: []string{"sum"},
+						Name: "verbose",
 					},
 					&cli.BoolFlag{
-						Name: "verbose",
+						Name:  "discard",
+						Usage: "discard the clipboard stream output (for testing purpose)",
 					},
 				},
 				Action: newPasteCommand().run(),
+			},
+			{
+				Name: "clean",
+				Flags: []cli.Flag{
+					&cli.DurationFlag{
+						Name:  "conn-timeout",
+						Value: defaultClientConnTimeout,
+					},
+				},
+				Action: newCleanCommand().run(),
 			},
 		},
 	}

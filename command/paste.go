@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/docker/go-units"
+	"github.com/gen2brain/beeep"
 	"github.com/tigerwill90/webcb/client"
 	"github.com/urfave/cli/v2"
 	"google.golang.org/grpc"
@@ -55,13 +56,18 @@ func (s *pasteCmd) run() cli.ActionFunc {
 		}
 		defer pasteCancel()
 
+		var stdout io.Writer = os.Stdout
+		if cc.Bool("discard") {
+			stdout = io.Discard
+		}
+
+		c := client.New(conn, client.WithChunkSize(chunkSize))
+
 		sig := make(chan os.Signal, 2)
 		pastErr := make(chan error)
 		signal.Notify(sig, os.Interrupt, os.Kill)
-
-		c := client.New(conn, client.WithChunkSize(chunkSize), client.WithChecksum(cc.Bool("checksum")))
 		go func() {
-			pastErr <- c.Paste(pasteCtx, io.Discard)
+			pastErr <- c.Paste(pasteCtx, stdout)
 		}()
 
 		select {
@@ -74,6 +80,7 @@ func (s *pasteCmd) run() cli.ActionFunc {
 				}
 				return fmt.Errorf("paste failed: %w", cErr)
 			}
+			beeep.Notify("pasted", "this is looking absoluty awesome", "")
 		}
 
 		return nil

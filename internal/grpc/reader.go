@@ -1,31 +1,33 @@
-package server
+package grpc
 
 import (
-	"errors"
-	"github.com/tigerwill90/webcb/proto"
 	"io"
 )
 
-func NewGrpcReader(srv proto.WebClipboard_CopyServer) *GrpcReader {
-	return &GrpcReader{srv: srv}
+type Receiver interface {
+	Next() ([]byte, error)
+	Checksum() []byte
 }
 
-type GrpcReader struct {
-	srv    proto.WebClipboard_CopyServer
+func NewReader(recv Receiver) *Reader {
+	return &Reader{r: recv}
+}
+
+type Reader struct {
+	r      Receiver
 	t      []byte
 	tLen   int
 	tIndex int
 	pIndex int
-	hash   []byte
 }
 
-func (r *GrpcReader) Sum() []byte {
-	return r.hash
+func (r *Reader) Checksum() []byte {
+	return r.r.Checksum()
 }
 
 // Read consume a grpc stream and completely fill p (len(p) == n)
 // except for the last read where n < p is possible.
-func (r *GrpcReader) Read(p []byte) (int, error) {
+func (r *Reader) Read(p []byte) (int, error) {
 	r.pIndex = 0
 	for {
 		if r.tLen > 0 {
@@ -38,7 +40,7 @@ func (r *GrpcReader) Read(p []byte) (int, error) {
 			r.pIndex = n + r.pIndex
 		}
 
-		stream, err := r.srv.Recv()
+		stdin, err := r.r.Next()
 		if err != nil {
 			if err == io.EOF {
 				break
@@ -46,16 +48,6 @@ func (r *GrpcReader) Read(p []byte) (int, error) {
 			return 0, err
 		}
 
-		switch stream.Data.(type) {
-		case *proto.Stream_Info_:
-			return 0, errors.New("protocol error: chunk stream expected but get info header")
-		case *proto.Stream_Hash:
-			r.hash = stream.GetHash()
-			return r.pIndex, io.EOF
-		default:
-		}
-
-		stdin := stream.GetChunk()
 		r.t = stdin
 		r.tIndex = 0
 		r.tLen = len(stdin)

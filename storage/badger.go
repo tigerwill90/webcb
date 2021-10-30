@@ -45,10 +45,16 @@ type BadgerDB struct {
 
 var ErrKeyNotFound = errors.New("key not found")
 
+func (b *BadgerDB) DropAll() error {
+	b.Lock()
+	defer b.Unlock()
+	return b.db.DropAll()
+}
+
 type StreamWriter interface {
 	io.Writer
-	LastWrite() error
-	Sum(b []byte) error
+	Flush() error
+	Checksum(b []byte) error
 }
 
 func (b *BadgerDB) ReadBatch(w StreamWriter) (int, error) {
@@ -67,6 +73,22 @@ func (b *BadgerDB) ReadBatch(w StreamWriter) (int, error) {
 		if err != nil {
 			return err
 		}
+
+		hashKey := fmt.Sprintf("%s/sha256/%s", index, hashSuffix)
+		item, err = txn.Get([]byte(hashKey))
+		if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
+			return err
+		}
+
+		if item != nil {
+			if err := item.Value(func(v []byte) error {
+				valCopy := append(v[:0:0], v...)
+				return w.Checksum(valCopy)
+			}); err != nil {
+				return err
+			}
+		}
+
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
 		prefix := []byte(fmt.Sprintf("%s/", index))
@@ -89,24 +111,7 @@ func (b *BadgerDB) ReadBatch(w StreamWriter) (int, error) {
 			}
 		}
 
-		if err := w.LastWrite(); err != nil {
-			return err
-		}
-
-		hashKey := fmt.Sprintf("%s/sha256/%s", index, hashSuffix)
-		item, err = txn.Get([]byte(hashKey))
-		if err != nil {
-			if errors.Is(err, badger.ErrKeyNotFound) {
-				fmt.Println("no hash found")
-				return nil
-			}
-			return err
-		}
-
-		return item.Value(func(v []byte) error {
-			valCopy := append(v[:0:0], v...)
-			return w.Sum(valCopy)
-		})
+		return w.Flush()
 	})
 	if err != nil {
 		return 0, err
@@ -116,7 +121,7 @@ func (b *BadgerDB) ReadBatch(w StreamWriter) (int, error) {
 
 type StreamReader interface {
 	io.Reader
-	Sum() []byte
+	Checksum() []byte
 }
 
 func (b *BadgerDB) WriteBatch(ttl time.Duration, r StreamReader) (int, error) {
@@ -156,7 +161,7 @@ func (b *BadgerDB) WriteBatch(ttl time.Duration, r StreamReader) (int, error) {
 		written += nr
 	}
 
-	sum := r.Sum()
+	sum := r.Checksum()
 	if len(sum) > 0 {
 		key := fmt.Sprintf("%d/sha256/%s", version, hashSuffix)
 		e := badger.NewEntry([]byte(key), sum)
@@ -314,7 +319,7 @@ func NewBadgerDB(config *BadgerConfig, logger hclog.Logger) (*BadgerDB, error) {
 					b.logger.Error(err.Error())
 					return
 				}
-				b.logger.Trace(fmt.Sprintf("GC deleted %d keys", deleted))
+				b.logger.Trace(fmt.Sprintf("GC discarded %d keys", deleted))
 			}()
 		}
 	}()

@@ -10,19 +10,33 @@ message PasteOption {
   int64 length = 1;
 }
 
-message Stream {
+
+message PastStream {
   message Info {
-    int64 ttl = 1;
+    bytes checksum = 1;
   }
 
   oneof data {
     Info info = 1;
     bytes chunk = 2;
-    bytes hash = 3;
+  }
+}
+
+message CopyStream {
+  message Info {
+    int64 ttl = 1;
+    bool compressed = 2;
+  }
+
+  oneof data {
+    Info info = 1;
+    bytes chunk = 2;
+    bytes checksum = 3;
   }
 }
 
 service WebClipboard {
-  rpc Copy (stream Stream) returns (google.protobuf.Empty) {}
-  rpc Paste (PasteOption) returns (stream Stream) {}
+  rpc Copy (stream CopyStream) returns (google.protobuf.Empty) {}
+  rpc Paste (PasteOption) returns (stream PastStream) {}
+  rpc Clean(google.protobuf.Empty) returns (google.protobuf.Empty) {}
 }
