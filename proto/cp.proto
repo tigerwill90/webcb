@@ -6,19 +6,29 @@ import "google/protobuf/empty.proto";
 
 option go_package = "github.com/tigerwill90/webcb/proto";
 
+message Clipboard {
+  uint64 sequence = 1;
+  string expire_at = 2;
+  bool compressed = 3;
+  bool encrypted = 4;
+  bytes checksum = 5;
+  int64 size = 6;
+}
+
 message PasteOption {
   int64 length = 1;
 }
 
-
 message PastStream {
   message Info {
-    bytes checksum = 1;
+    bool checksum = 1;
+    bool compressed = 2;
   }
 
   oneof data {
     Info info = 1;
     bytes chunk = 2;
+    bytes checksum = 3;
   }
 }
 

@@ -45,8 +45,8 @@ func (s *webClipboardService) Copy(server proto.WebClipboard_CopyServer) error {
 		ttl = DefaultTtl
 	}
 
-	r := grpc.NewReader(newGrpcCopy(server))
-	n, err := s.db.WriteBatch(ttl, r)
+	r := grpc.NewReader(newGrpcReceiver(server))
+	n, err := s.db.WriteBatch(r, ttl, fi.Compressed)
 	if err != nil {
 		return err
 	}
@@ -61,8 +61,9 @@ func (s *webClipboardService) Paste(option *proto.PasteOption, server proto.WebC
 		option.Length = DefaultWriteSize
 	}
 	fmt.Println("chunk size", option.Length)
-	w := grpc.NewWriter(newGrpcPaste(server), make([]byte, option.Length))
-	nr, err := s.db.ReadBatch(w)
+	sender := newGrpcSender(server)
+	w := grpc.NewWriter(sender, make([]byte, option.Length))
+	nr, err := s.db.ReadBatch(w, sender)
 	if err != nil {
 		return err
 	}
@@ -71,38 +72,48 @@ func (s *webClipboardService) Paste(option *proto.PasteOption, server proto.WebC
 	return nil
 }
 
-type grpcPaste struct {
+type grpcSender struct {
 	srv proto.WebClipboard_PasteServer
 }
 
-func newGrpcPaste(srv proto.WebClipboard_PasteServer) *grpcPaste {
-	return &grpcPaste{srv}
+func newGrpcSender(srv proto.WebClipboard_PasteServer) *grpcSender {
+	return &grpcSender{srv}
 }
 
-func (gp *grpcPaste) SendChunk(p []byte) error {
+func (gp *grpcSender) Write(compressed, hasChecksum bool) error {
+	return gp.srv.Send(&proto.PastStream{Data: &proto.PastStream_Info_{
+		Info: &proto.PastStream_Info{
+			Checksum:   hasChecksum,
+			Compressed: compressed,
+		},
+	}})
+}
+
+func (gp *grpcSender) SendChunk(p []byte) error {
 	return gp.srv.Send(&proto.PastStream{Data: &proto.PastStream_Chunk{
 		Chunk: p,
 	}})
 }
 
-func (gp *grpcPaste) SendChecksum(p []byte) error {
-	return gp.srv.Send(&proto.PastStream{Data: &proto.PastStream_Info_{
-		Info: &proto.PastStream_Info{
-			Checksum: p,
-		},
+func (gp *grpcSender) SendChecksum(p []byte) error {
+	if len(p) == 0 {
+		return nil
+	}
+	return gp.srv.Send(&proto.PastStream{Data: &proto.PastStream_Checksum{
+		Checksum: p,
 	}})
 }
 
-func newGrpcCopy(srv proto.WebClipboard_CopyServer) *grpcCopy {
-	return &grpcCopy{srv: srv}
+func newGrpcReceiver(srv proto.WebClipboard_CopyServer) *grpcReceiver {
+	return &grpcReceiver{srv: srv}
 }
 
-type grpcCopy struct {
+type grpcReceiver struct {
 	srv      proto.WebClipboard_CopyServer
 	checksum []byte
 }
 
-func (gc *grpcCopy) Next() ([]byte, error) {
+func (gc *grpcReceiver) Next() ([]byte, error) {
 	stream, err := gc.srv.Recv()
 	if err != nil {
 		return nil, err
@@ -119,6 +130,6 @@ func (gc *grpcCopy) Next() ([]byte, error) {
 	return stream.GetChunk(), nil
 }
 
-func (gc *grpcCopy) Checksum() []byte {
+func (gc *grpcReceiver) Checksum() []byte {
 	return gc.checksum
 }

@@ -50,15 +50,16 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 	hasher := sha256.New()
 	defer hasher.Reset()
 
-	gw := grpchelper.NewWriter(newGrpcCopy(stream), make([]byte, c.chunkSize))
+	gw := grpchelper.NewWriter(newGrpcSender(stream), make([]byte, c.chunkSize))
 	w := io.Writer(gw)
+	var enc *zstd.Encoder
 	if c.compression {
-		enc, err := zstd.NewWriter(w)
+		enc, err = zstd.NewWriter(gw, zstd.WithEncoderLevel(zstd.SpeedFastest))
 		if err != nil {
 			return err
 		}
-		defer enc.Close()
 		w = enc
+		defer enc.Close()
 	}
 
 	buf := make([]byte, c.chunkSize)
@@ -74,6 +75,11 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 			if errors.Is(err, io.ErrUnexpectedEOF) {
 				if _, err := w.Write(buf[:n]); err != nil {
 					return err
+				}
+				if enc != nil {
+					if err := enc.Close(); err != nil {
+						return err
+					}
 				}
 				if c.checksum {
 					if _, err := hasher.Write(buf[:n]); err != nil {
@@ -96,14 +102,12 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 		}
 	}
 
-	if err := gw.Flush(); err != nil {
-		return err
-	}
-
+	var checksum []byte
 	if c.checksum {
-		if err := gw.Checksum(hasher.Sum(nil)); err != nil {
-			return err
-		}
+		checksum = hasher.Sum(nil)
+	}
+	if err := gw.Flush(checksum); err != nil {
+		return err
 	}
 
 	_, err = stream.CloseAndRecv()
@@ -119,49 +123,68 @@ func (c *Client) Paste(ctx context.Context, w io.Writer) error {
 		return err
 	}
 
-	var (
-		hasChecksum        bool
-		checksum           []byte
-		chunkStreamStarted bool
-	)
-
 	hasher := sha256.New()
 	defer hasher.Reset()
 
-	for {
-		stream, err := resp.Recv()
+	stream, err := resp.Recv()
+	if err != nil {
+		return err
+	}
+
+	info := stream.GetInfo()
+	if info == nil {
+		return errors.New("protocol error: chunk stream expected but get info header")
+	}
+
+	gr := grpchelper.NewReader(newGrpcReceiver(resp))
+	r := io.Reader(gr)
+	if info.Compressed {
+		dec, err := zstd.NewReader(r)
 		if err != nil {
-			if err == io.EOF {
-				break
-			}
 			return err
 		}
+		defer dec.Close()
+		r = dec
+	}
 
-		switch stream.Data.(type) {
-		case *proto.PastStream_Info_:
-			if chunkStreamStarted {
-				return errors.New("protocol error: chunk stream expected but get info header")
+	buf := make([]byte, c.chunkSize)
+	for {
+		n, err := r.Read(buf)
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				return err
 			}
-			hasChecksum = true
-			checksum = stream.GetInfo().GetChecksum()
-		case *proto.PastStream_Chunk:
-			chunkStreamStarted = true
-			chunk := stream.GetChunk()
-			if hasChecksum {
-				if _, err := hasher.Write(chunk); err != nil {
+
+			if n > 0 {
+				if info.Checksum {
+					if _, err := hasher.Write(buf[:n]); err != nil {
+						return err
+					}
+				}
+				if _, err := w.Write(buf[:n]); err != nil {
 					return err
 				}
 			}
-			if _, err := w.Write(chunk); err != nil {
+
+			break
+		}
+
+		if info.Checksum {
+			if _, err := hasher.Write(buf[:n]); err != nil {
 				return err
 			}
 		}
+		if _, err := w.Write(buf[:n]); err != nil {
+			return err
+		}
+
 	}
-	if hasChecksum {
-		if len(checksum) != sha256.Size {
+
+	if info.Checksum {
+		if len(gr.Checksum()) != sha256.Size {
 			return errors.New("invalid sha256 size")
 		}
-		if n := bytes.Compare(checksum, hasher.Sum(nil)); n != 0 {
+		if n := bytes.Compare(gr.Checksum(), hasher.Sum(nil)); n != 0 {
 			return errors.New("checksum failed")
 		}
 	}
@@ -183,22 +206,55 @@ func sendInfo(stream proto.WebClipboard_CopyClient, ttl time.Duration, compresse
 	}})
 }
 
-type grpcCopy struct {
+type grpcSender struct {
 	c proto.WebClipboard_CopyClient
 }
 
-func newGrpcCopy(client proto.WebClipboard_CopyClient) *grpcCopy {
-	return &grpcCopy{client}
+func newGrpcSender(client proto.WebClipboard_CopyClient) *grpcSender {
+	return &grpcSender{client}
 }
 
-func (gc *grpcCopy) SendChunk(p []byte) error {
+func (gc *grpcSender) SendChunk(p []byte) error {
 	return gc.c.Send(&proto.CopyStream{Data: &proto.CopyStream_Chunk{
 		Chunk: p,
 	}})
 }
 
-func (gc *grpcCopy) SendChecksum(p []byte) error {
+func (gc *grpcSender) SendChecksum(p []byte) error {
+	if len(p) == 0 {
+		return nil
+	}
 	return gc.c.Send(&proto.CopyStream{Data: &proto.CopyStream_Checksum{
 		Checksum: p,
 	}})
+}
+
+func newGrpcReceiver(client proto.WebClipboard_PasteClient) *grpcReceiver {
+	return &grpcReceiver{c: client}
+}
+
+type grpcReceiver struct {
+	c        proto.WebClipboard_PasteClient
+	checksum []byte
+}
+
+func (gc *grpcReceiver) Next() ([]byte, error) {
+	stream, err := gc.c.Recv()
+	if err != nil {
+		return nil, err
+	}
+
+	switch stream.Data.(type) {
+	case *proto.PastStream_Info_:
+		return nil, errors.New("protocol error: chunk stream expected but get info header")
+	case *proto.PastStream_Checksum:
+		gc.checksum = stream.GetChecksum()
+		return nil, io.EOF
+	default:
+	}
+	return stream.GetChunk(), nil
+}
+
+func (gc *grpcReceiver) Checksum() []byte {
+	return gc.checksum
 }

@@ -47,13 +47,12 @@ func (w *Writer) Write(p []byte) (int, error) {
 	return w.pIndex, nil
 }
 
-func (w *Writer) Flush() error {
+func (w *Writer) Flush(checksum []byte) error {
 	if w.tLen > 0 {
-		return w.s.SendChunk(w.t[:w.tIndex])
+		if err := w.s.SendChunk(w.t[:w.tIndex]); err != nil {
+			return err
+		}
 	}
-	return nil
-}
 
-func (w *Writer) Checksum(p []byte) error {
-	return w.s.SendChecksum(p)
+	return w.s.SendChecksum(checksum)
 }

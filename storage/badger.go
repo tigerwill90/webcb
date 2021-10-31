@@ -8,6 +8,8 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/hashicorp/go-hclog"
 	"github.com/oklog/ulid/v2"
+	"github.com/tigerwill90/webcb/proto"
+	protobuf "google.golang.org/protobuf/proto"
 	"io"
 	"math/rand"
 	"sync"
@@ -19,7 +21,6 @@ const (
 	latestKey     = "latest"
 	versionKey    = "version"
 	chunkSuffix   = "chunk"
-	hashSuffix    = "hash"
 	MinGcDuration = 1 * time.Minute
 )
 
@@ -53,11 +54,14 @@ func (b *BadgerDB) DropAll() error {
 
 type StreamWriter interface {
 	io.Writer
-	Flush() error
-	Checksum(b []byte) error
+	Flush(checksum []byte) error
 }
 
-func (b *BadgerDB) ReadBatch(w StreamWriter) (int, error) {
+type HeaderWriter interface {
+	Write(compressed, hasChecksum bool) error
+}
+
+func (b *BadgerDB) ReadBatch(sw StreamWriter, hw HeaderWriter) (int, error) {
 	b.RLock()
 	defer b.RUnlock()
 	read := 0
@@ -69,36 +73,31 @@ func (b *BadgerDB) ReadBatch(w StreamWriter) (int, error) {
 			}
 			return err
 		}
-		index, err := item.ValueCopy(nil)
+
+		value, err := item.ValueCopy(nil)
 		if err != nil {
 			return err
 		}
 
-		hashKey := fmt.Sprintf("%s/sha256/%s", index, hashSuffix)
-		item, err = txn.Get([]byte(hashKey))
-		if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
+		cb := new(proto.Clipboard)
+		if err := protobuf.Unmarshal(value, cb); err != nil {
 			return err
 		}
 
-		if item != nil {
-			if err := item.Value(func(v []byte) error {
-				valCopy := append(v[:0:0], v...)
-				return w.Checksum(valCopy)
-			}); err != nil {
-				return err
-			}
+		if err := hw.Write(cb.Compressed, len(cb.Checksum) > 0); err != nil {
+			return err
 		}
 
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
-		prefix := []byte(fmt.Sprintf("%s/", index))
+		prefix := []byte(fmt.Sprintf("%d/", cb.Sequence))
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
 			k := item.Key()
 			err := item.Value(func(v []byte) error {
 				if bytes.HasSuffix(k, []byte(chunkSuffix)) {
 					valCopy := append(v[:0:0], v...)
-					nw, err := w.Write(valCopy)
+					nw, err := sw.Write(valCopy)
 					if err != nil {
 						return err
 					}
@@ -111,7 +110,7 @@ func (b *BadgerDB) ReadBatch(w StreamWriter) (int, error) {
 			}
 		}
 
-		return w.Flush()
+		return sw.Flush(cb.Checksum)
 	})
 	if err != nil {
 		return 0, err
@@ -124,7 +123,7 @@ type StreamReader interface {
 	Checksum() []byte
 }
 
-func (b *BadgerDB) WriteBatch(ttl time.Duration, r StreamReader) (int, error) {
+func (b *BadgerDB) WriteBatch(r StreamReader, ttl time.Duration, compressed bool) (int, error) {
 	b.RLock()
 	defer b.RUnlock()
 	buf := make([]byte, b.valueSize)
@@ -138,7 +137,7 @@ func (b *BadgerDB) WriteBatch(ttl time.Duration, r StreamReader) (int, error) {
 	for {
 		nr, err := r.Read(buf)
 		if err != nil {
-			if err != io.EOF {
+			if !errors.Is(err, io.EOF) {
 				return 0, err
 			}
 			if nr > 0 {
@@ -161,17 +160,19 @@ func (b *BadgerDB) WriteBatch(ttl time.Duration, r StreamReader) (int, error) {
 		written += nr
 	}
 
-	sum := r.Checksum()
-	if len(sum) > 0 {
-		key := fmt.Sprintf("%d/sha256/%s", version, hashSuffix)
-		e := badger.NewEntry([]byte(key), sum)
-		if err := batch.SetEntry(e); err != nil {
-			return 0, err
-		}
+	cb := &proto.Clipboard{
+		Sequence:   version,
+		ExpireAt:   time.Now().Add(ttl).Format(time.RFC1123Z),
+		Compressed: compressed,
+		Checksum:   r.Checksum(),
+		Size:       int64(written),
 	}
 
-	key := fmt.Sprintf("%d", version)
-	e := badger.NewEntry([]byte(latestKey), []byte(key)).WithTTL(ttl)
+	value, err := protobuf.Marshal(cb)
+	if err != nil {
+		return 0, err
+	}
+	e := badger.NewEntry([]byte(latestKey), value).WithTTL(ttl)
 	if err := batch.SetEntry(e); err != nil {
 		return 0, err
 	}
@@ -189,6 +190,19 @@ func (b *BadgerDB) runGC(discardRatio float64) error {
 	return b.db.RunValueLogGC(discardRatio)
 }
 
+func getIndex(item *badger.Item) ([]byte, error) {
+	if item == nil {
+		return nil, nil
+	}
+	cb := new(proto.Clipboard)
+	if err := item.Value(func(val []byte) error {
+		return protobuf.Unmarshal(val, cb)
+	}); err != nil {
+		return nil, err
+	}
+	return []byte(fmt.Sprintf("%d/", cb.Sequence)), nil
+}
+
 func (b *BadgerDB) discard(ctx context.Context, keys int) (int, error) {
 	b.RLock()
 	defer b.RUnlock()
@@ -202,15 +216,11 @@ func (b *BadgerDB) discard(ctx context.Context, keys int) (int, error) {
 		return 0, err
 	}
 
-	var valCopy []byte
-	if item != nil {
-		valCopy, err = item.ValueCopy(nil)
-		if err != nil {
-			return 0, err
-		}
+	index, err := getIndex(item)
+	if err != nil {
+		return 0, err
 	}
 
-	index := []byte(fmt.Sprintf("%s/", valCopy))
 	opts := badger.DefaultIteratorOptions
 	it := txn.NewIterator(opts)
 	defer it.Close()
@@ -227,7 +237,7 @@ STOP:
 		}
 		item := it.Item()
 		key := item.Key()
-		if (item == nil || !bytes.HasPrefix(key, index)) && !bytes.Equal(key, []byte(latestKey)) && !bytes.Equal(key, []byte(versionKey)) {
+		if (index == nil || !bytes.HasPrefix(key, index)) && !bytes.Equal(key, []byte(latestKey)) && !bytes.Equal(key, []byte(versionKey)) {
 			keyCopy := item.KeyCopy(nil)
 			err := txn.Delete(keyCopy)
 			if err != nil {
