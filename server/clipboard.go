@@ -22,7 +22,19 @@ type webClipboardService struct {
 	db *storage.BadgerDB
 }
 
-func (s *webClipboardService) Clean(ctx context.Context, empty *emptypb.Empty) (*emptypb.Empty, error) {
+func (s *webClipboardService) Config(_ context.Context, _ *emptypb.Empty) (*proto.ServerConfig, error) {
+	lsm, vlog := s.db.Size()
+	return &proto.ServerConfig{
+		DbSize:              lsm + vlog,
+		DbPath:              "",
+		GrpcMaxReceiveBytes: 0,
+		GcInterval:          0,
+		DevMode:             false,
+		GrpcSecure:          0,
+	}, nil
+}
+
+func (s *webClipboardService) Clean(_ context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
 	if err := s.db.DropAll(); err != nil {
 		return nil, err
 	}
@@ -45,8 +57,10 @@ func (s *webClipboardService) Copy(server proto.WebClipboard_CopyServer) error {
 		ttl = DefaultTtl
 	}
 
+	fmt.Printf("iv: %x\nsalt: %x\n", fi.Iv, fi.Salt)
+
 	r := grpc.NewReader(newGrpcReceiver(server))
-	n, err := s.db.WriteBatch(r, ttl, fi.Compressed)
+	n, err := s.db.WriteBatch(r, ttl, fi.Compressed, fi.Iv, fi.Salt)
 	if err != nil {
 		return err
 	}
@@ -80,11 +94,13 @@ func newGrpcSender(srv proto.WebClipboard_PasteServer) *grpcSender {
 	return &grpcSender{srv}
 }
 
-func (gp *grpcSender) Write(compressed, hasChecksum bool) error {
+func (gp *grpcSender) Write(compressed, hasChecksum bool, salt, iv []byte) error {
 	return gp.srv.Send(&proto.PastStream{Data: &proto.PastStream_Info_{
 		Info: &proto.PastStream_Info{
 			Checksum:   hasChecksum,
 			Compressed: compressed,
+			Salt:       salt,
+			Iv:         iv,
 		},
 	}})
 }

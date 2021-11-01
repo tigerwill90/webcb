@@ -10,6 +10,7 @@ type config struct {
 	checksum    bool
 	ttl         time.Duration
 	compression bool
+	password    []byte
 }
 
 func defaultConfig() *config {
@@ -46,5 +47,11 @@ func WithTtl(d time.Duration) Option {
 func WithCompression(enable bool) Option {
 	return func(c *config) {
 		c.compression = enable
+	}
+}
+
+func WithPassword(password string) Option {
+	return func(c *config) {
+		c.password = []byte(password)
 	}
 }

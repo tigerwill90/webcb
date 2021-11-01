@@ -92,6 +92,10 @@ func Run(args []string) int {
 					&cli.BoolFlag{
 						Name: "compress",
 					},
+					&cli.StringFlag{
+						Name:    "password",
+						Aliases: []string{"pwd"},
+					},
 				},
 				Action: newCopyCommand().run(),
 			},
@@ -118,6 +122,10 @@ func Run(args []string) int {
 					&cli.BoolFlag{
 						Name:  "discard",
 						Usage: "discard the clipboard stream output (for testing purpose)",
+					},
+					&cli.StringFlag{
+						Name:    "password",
+						Aliases: []string{"pwd"},
 					},
 				},
 				Action: newPasteCommand().run(),

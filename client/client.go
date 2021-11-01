@@ -3,14 +3,18 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/aes"
 	"crypto/sha256"
 	"errors"
 	"github.com/klauspost/compress/zstd"
+	"github.com/tigerwill90/webcb/internal/crypto"
+	"github.com/tigerwill90/webcb/internal/enclave"
 	grpchelper "github.com/tigerwill90/webcb/internal/grpc"
 	"github.com/tigerwill90/webcb/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"io"
+	"math/rand"
 	"time"
 )
 
@@ -20,6 +24,7 @@ type Client struct {
 	checksum    bool
 	ttl         time.Duration
 	compression bool
+	password    []byte
 }
 
 func New(conn grpc.ClientConnInterface, opts ...Option) *Client {
@@ -34,16 +39,13 @@ func New(conn grpc.ClientConnInterface, opts ...Option) *Client {
 		checksum:    config.checksum,
 		ttl:         config.ttl,
 		compression: config.compression,
+		password:    config.password,
 	}
 }
 
 func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 	stream, err := c.c.Copy(ctx)
 	if err != nil {
-		return err
-	}
-
-	if err := sendInfo(stream, c.ttl, c.compression); err != nil {
 		return err
 	}
 
@@ -54,12 +56,45 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 	w := io.Writer(gw)
 	var enc *zstd.Encoder
 	if c.compression {
-		enc, err = zstd.NewWriter(gw, zstd.WithEncoderLevel(zstd.SpeedFastest))
+		enc, err = zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedFastest))
 		if err != nil {
 			return err
 		}
 		w = enc
 		defer enc.Close()
+	}
+
+	var salt []byte
+	var iv []byte
+	if len(c.password) > 0 {
+		randSalt := make([]byte, crypto.SaltSize)
+		rand.Read(randSalt)
+		randIv := make([]byte, aes.BlockSize)
+		rand.Read(randIv)
+
+		salt = randSalt
+		iv = randIv
+
+		e := enclave.New(c.password)
+		pwd, destroy := e.Open()
+		defer destroy()
+
+		key, err := crypto.DeriveKey(pwd, salt)
+		if err != nil {
+			return err
+		}
+		destroy()
+
+		sw, err := crypto.NewStreamWriter(key, iv, w)
+		if err != nil {
+			return err
+		}
+		defer sw.Close()
+		w = sw
+	}
+
+	if err := sendInfo(stream, c.ttl, c.compression, iv, salt); err != nil {
+		return err
 	}
 
 	buf := make([]byte, c.chunkSize)
@@ -136,6 +171,10 @@ func (c *Client) Paste(ctx context.Context, w io.Writer) error {
 		return errors.New("protocol error: chunk stream expected but get info header")
 	}
 
+	if len(c.password) == 0 && (len(info.Iv) != 0 || len(info.Salt) != 0) {
+		return errors.New("data is encrypted but no password provided")
+	}
+
 	gr := grpchelper.NewReader(newGrpcReceiver(resp))
 	r := io.Reader(gr)
 	if info.Compressed {
@@ -145,6 +184,23 @@ func (c *Client) Paste(ctx context.Context, w io.Writer) error {
 		}
 		defer dec.Close()
 		r = dec
+	}
+	if len(c.password) > 0 && len(info.Iv) == aes.BlockSize && len(info.Salt) == crypto.SaltSize {
+		e := enclave.New(c.password)
+		pwd, destroy := e.Open()
+		defer destroy()
+
+		key, err := crypto.DeriveKey(pwd, info.Salt)
+		if err != nil {
+			return err
+		}
+		destroy()
+
+		sr, err := crypto.NewStreamReader(key, info.Iv, r)
+		if err != nil {
+			return err
+		}
+		r = sr
 	}
 
 	buf := make([]byte, c.chunkSize)
@@ -197,11 +253,13 @@ func (c *Client) Clean(ctx context.Context) error {
 	return err
 }
 
-func sendInfo(stream proto.WebClipboard_CopyClient, ttl time.Duration, compressed bool) error {
+func sendInfo(stream proto.WebClipboard_CopyClient, ttl time.Duration, compressed bool, iv []byte, salt []byte) error {
 	return stream.Send(&proto.CopyStream{Data: &proto.CopyStream_Info_{
 		Info: &proto.CopyStream_Info{
 			Ttl:        int64(ttl),
 			Compressed: compressed,
+			Salt:       salt,
+			Iv:         iv,
 		},
 	}})
 }

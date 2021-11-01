@@ -58,7 +58,7 @@ type StreamWriter interface {
 }
 
 type HeaderWriter interface {
-	Write(compressed, hasChecksum bool) error
+	Write(compressed, hasChecksum bool, salt, iv []byte) error
 }
 
 func (b *BadgerDB) ReadBatch(sw StreamWriter, hw HeaderWriter) (int, error) {
@@ -84,7 +84,7 @@ func (b *BadgerDB) ReadBatch(sw StreamWriter, hw HeaderWriter) (int, error) {
 			return err
 		}
 
-		if err := hw.Write(cb.Compressed, len(cb.Checksum) > 0); err != nil {
+		if err := hw.Write(cb.Compressed, len(cb.Checksum) > 0, cb.Salt, cb.Iv); err != nil {
 			return err
 		}
 
@@ -123,7 +123,7 @@ type StreamReader interface {
 	Checksum() []byte
 }
 
-func (b *BadgerDB) WriteBatch(r StreamReader, ttl time.Duration, compressed bool) (int, error) {
+func (b *BadgerDB) WriteBatch(r StreamReader, ttl time.Duration, compressed bool, iv []byte, salt []byte) (int, error) {
 	b.RLock()
 	defer b.RUnlock()
 	buf := make([]byte, b.valueSize)
@@ -164,6 +164,8 @@ func (b *BadgerDB) WriteBatch(r StreamReader, ttl time.Duration, compressed bool
 		Sequence:   version,
 		ExpireAt:   time.Now().Add(ttl).Format(time.RFC1123Z),
 		Compressed: compressed,
+		Salt:       salt,
+		Iv:         iv,
 		Checksum:   r.Checksum(),
 		Size:       int64(written),
 	}
@@ -182,6 +184,12 @@ func (b *BadgerDB) WriteBatch(r StreamReader, ttl time.Duration, compressed bool
 	}
 
 	return written, nil
+}
+
+func (b *BadgerDB) Size() (lsm int64, vlog int64) {
+	b.RLock()
+	defer b.RUnlock()
+	return b.db.Size()
 }
 
 func (b *BadgerDB) runGC(discardRatio float64) error {

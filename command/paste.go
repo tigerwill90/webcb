@@ -61,7 +61,7 @@ func (s *pasteCmd) run() cli.ActionFunc {
 			stdout = io.Discard
 		}
 
-		c := client.New(conn, client.WithChunkSize(chunkSize))
+		c := client.New(conn, client.WithChunkSize(chunkSize), client.WithPassword(cc.String("password")))
 
 		sig := make(chan os.Signal, 2)
 		pastErr := make(chan error)

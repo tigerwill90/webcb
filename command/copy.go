@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/awnumar/memguard"
 	"github.com/docker/go-units"
 	"github.com/tigerwill90/webcb/client"
 	"github.com/urfave/cli/v2"
@@ -27,6 +28,7 @@ const defaultClientConnTimeout = 5 * time.Second
 
 func (s *copyCmd) run() cli.ActionFunc {
 	return func(cc *cli.Context) error {
+		defer memguard.Purge()
 		tcpAddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(cc.String("host"), strconv.FormatUint(cc.Uint64("port"), 10)))
 		if err != nil {
 			return err
@@ -63,7 +65,14 @@ func (s *copyCmd) run() cli.ActionFunc {
 		copyErr := make(chan error)
 		signal.Notify(sig, os.Interrupt, os.Kill)
 
-		c := client.New(conn, client.WithChunkSize(chunkSize), client.WithChecksum(cc.Bool("checksum")), client.WithTtl(cc.Duration("ttl")), client.WithCompression(cc.Bool("compress")))
+		c := client.New(
+			conn,
+			client.WithChunkSize(chunkSize),
+			client.WithChecksum(cc.Bool("checksum")),
+			client.WithTtl(cc.Duration("ttl")),
+			client.WithCompression(cc.Bool("compress")),
+			client.WithPassword(cc.String("password")),
+		)
 		go func() {
 			copyErr <- c.Copy(copyCtx, bufio.NewReader(os.Stdin))
 		}()

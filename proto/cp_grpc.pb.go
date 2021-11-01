@@ -22,6 +22,7 @@ type WebClipboardClient interface {
 	Copy(ctx context.Context, opts ...grpc.CallOption) (WebClipboard_CopyClient, error)
 	Paste(ctx context.Context, in *PasteOption, opts ...grpc.CallOption) (WebClipboard_PasteClient, error)
 	Clean(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	Config(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ServerConfig, error)
 }
 
 type webClipboardClient struct {
@@ -107,6 +108,15 @@ func (c *webClipboardClient) Clean(ctx context.Context, in *emptypb.Empty, opts 
 	return out, nil
 }
 
+func (c *webClipboardClient) Config(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ServerConfig, error) {
+	out := new(ServerConfig)
+	err := c.cc.Invoke(ctx, "/proto.WebClipboard/Config", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WebClipboardServer is the server API for WebClipboard service.
 // All implementations must embed UnimplementedWebClipboardServer
 // for forward compatibility
@@ -114,6 +124,7 @@ type WebClipboardServer interface {
 	Copy(WebClipboard_CopyServer) error
 	Paste(*PasteOption, WebClipboard_PasteServer) error
 	Clean(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
+	Config(context.Context, *emptypb.Empty) (*ServerConfig, error)
 	mustEmbedUnimplementedWebClipboardServer()
 }
 
@@ -129,6 +140,9 @@ func (UnimplementedWebClipboardServer) Paste(*PasteOption, WebClipboard_PasteSer
 }
 func (UnimplementedWebClipboardServer) Clean(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Clean not implemented")
+}
+func (UnimplementedWebClipboardServer) Config(context.Context, *emptypb.Empty) (*ServerConfig, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Config not implemented")
 }
 func (UnimplementedWebClipboardServer) mustEmbedUnimplementedWebClipboardServer() {}
 
@@ -208,6 +222,24 @@ func _WebClipboard_Clean_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WebClipboard_Config_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WebClipboardServer).Config(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/proto.WebClipboard/Config",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WebClipboardServer).Config(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WebClipboard_ServiceDesc is the grpc.ServiceDesc for WebClipboard service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -218,6 +250,10 @@ var WebClipboard_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Clean",
 			Handler:    _WebClipboard_Clean_Handler,
+		},
+		{
+			MethodName: "Config",
+			Handler:    _WebClipboard_Config_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
