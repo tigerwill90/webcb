@@ -38,6 +38,17 @@ func Run(args []string) int {
 		},
 		Commands: []*cli.Command{
 			{
+				Name:  "config",
+				Usage: "show server config",
+				Flags: []cli.Flag{
+					&cli.DurationFlag{
+						Name:  "conn-timeout",
+						Value: defaultClientConnTimeout,
+					},
+				},
+				Action: newConfigCommand().run(),
+			},
+			{
 				Name:    "serve",
 				Aliases: []string{"s"},
 				Usage:   "run a webcb server",
@@ -67,8 +78,9 @@ func Run(args []string) int {
 				Usage:   "copy to web clipboard",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:  "size",
-						Value: "1048576b",
+						Name:    "transfer-rate",
+						Aliases: []string{"rate"},
+						Value:   "1048576b",
 					},
 					&cli.DurationFlag{
 						Name:        "timeout",
@@ -105,8 +117,9 @@ func Run(args []string) int {
 				Usage:   "paste from web clipboard",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:  "size",
-						Value: "1048576b",
+						Name:    "transfer-rate",
+						Aliases: []string{"rate"},
+						Value:   "1048576b",
 					},
 					&cli.DurationFlag{
 						Name:        "timeout",

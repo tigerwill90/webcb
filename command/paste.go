@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/awnumar/memguard"
 	"github.com/docker/go-units"
 	"github.com/gen2brain/beeep"
 	"github.com/tigerwill90/webcb/client"
@@ -24,12 +25,13 @@ func newPasteCommand() *pasteCmd {
 
 func (s *pasteCmd) run() cli.ActionFunc {
 	return func(cc *cli.Context) error {
+		defer memguard.Purge()
 		tcpAddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(cc.String("host"), strconv.FormatUint(cc.Uint64("port"), 10)))
 		if err != nil {
 			return err
 		}
 
-		chunkSize, err := units.FromHumanSize(cc.String("size"))
+		chunkSize, err := units.FromHumanSize(cc.String("transfer-rate"))
 		if err != nil {
 			return err
 		}
@@ -61,7 +63,7 @@ func (s *pasteCmd) run() cli.ActionFunc {
 			stdout = io.Discard
 		}
 
-		c := client.New(conn, client.WithChunkSize(chunkSize), client.WithPassword(cc.String("password")))
+		c := client.New(conn, client.WithTransferRate(chunkSize), client.WithPassword(cc.String("password")))
 
 		sig := make(chan os.Signal, 2)
 		pastErr := make(chan error)

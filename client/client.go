@@ -153,7 +153,7 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 }
 
 func (c *Client) Paste(ctx context.Context, w io.Writer) error {
-	resp, err := c.c.Paste(ctx, &proto.PasteOption{Length: c.chunkSize}, grpc.MaxCallRecvMsgSize(int(c.chunkSize+1000)))
+	resp, err := c.c.Paste(ctx, &proto.PasteOption{TransferRate: c.chunkSize}, grpc.MaxCallRecvMsgSize(int(c.chunkSize+1000)))
 	if err != nil {
 		return err
 	}
@@ -166,9 +166,19 @@ func (c *Client) Paste(ctx context.Context, w io.Writer) error {
 		return err
 	}
 
-	info := stream.GetInfo()
-	if info == nil {
-		return errors.New("protocol error: chunk stream expected but get info header")
+	var info *proto.PastStream_Info
+	var pasteErr *proto.PastStream_Error
+	switch stream.Data.(type) {
+	case *proto.PastStream_Info_:
+		info = stream.GetInfo()
+	case *proto.PastStream_Error_:
+		pasteErr = stream.GetError()
+	default:
+		return errors.New("protocol error: info or error message expected but get a chunk message")
+	}
+
+	if pasteErr != nil {
+		return errors.New(pasteErr.Message)
 	}
 
 	if len(c.password) == 0 && (len(info.Iv) != 0 || len(info.Salt) != 0) {
@@ -253,6 +263,20 @@ func (c *Client) Clean(ctx context.Context) error {
 	return err
 }
 
+type ServerConfig struct {
+	DbSize int64
+}
+
+func (c *Client) Config(ctx context.Context) (*ServerConfig, error) {
+	config, err := c.c.Config(ctx, &emptypb.Empty{})
+	if err != nil {
+		return nil, err
+	}
+	return &ServerConfig{
+		DbSize: config.DbSize,
+	}, nil
+}
+
 func sendInfo(stream proto.WebClipboard_CopyClient, ttl time.Duration, compressed bool, iv []byte, salt []byte) error {
 	return stream.Send(&proto.CopyStream{Data: &proto.CopyStream_Info_{
 		Info: &proto.CopyStream_Info{
@@ -304,7 +328,9 @@ func (gc *grpcReceiver) Next() ([]byte, error) {
 
 	switch stream.Data.(type) {
 	case *proto.PastStream_Info_:
-		return nil, errors.New("protocol error: chunk stream expected but get info header")
+		return nil, errors.New("protocol error: chunk message expected but get an info message")
+	case *proto.PastStream_Error_:
+		return nil, errors.New("protocol error: chunk message expected but get an error message")
 	case *proto.PastStream_Checksum:
 		gc.checksum = stream.GetChecksum()
 		return nil, io.EOF

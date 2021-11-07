@@ -34,7 +34,7 @@ func (s *copyCmd) run() cli.ActionFunc {
 			return err
 		}
 
-		chunkSize, err := units.FromHumanSize(cc.String("size"))
+		chunkSize, err := units.FromHumanSize(cc.String("transfer-rate"))
 		if err != nil {
 			return err
 		}
@@ -67,7 +67,7 @@ func (s *copyCmd) run() cli.ActionFunc {
 
 		c := client.New(
 			conn,
-			client.WithChunkSize(chunkSize),
+			client.WithTransferRate(chunkSize),
 			client.WithChecksum(cc.Bool("checksum")),
 			client.WithTtl(cc.Duration("ttl")),
 			client.WithCompression(cc.Bool("compress")),

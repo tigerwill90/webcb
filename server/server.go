@@ -13,19 +13,19 @@ type Server struct {
 	srv     *grpc.Server
 }
 
-type Config struct {
-	TcpAddr         *net.TCPAddr
-	Db              *storage.BadgerDB
-	GrpcMaxRecvSize int
-}
+func NewServer(addr *net.TCPAddr, db *storage.BadgerDB, opts ...Option) *Server {
+	config := defaultOption()
+	for _, opt := range opts {
+		opt.apply(config)
+	}
 
-func NewServer(config Config) *Server {
-	srv := grpc.NewServer(grpc.MaxRecvMsgSize(config.GrpcMaxRecvSize))
+	srv := grpc.NewServer(grpc.MaxRecvMsgSize(config.grpcMaxRecvSize))
 	proto.RegisterWebClipboardServer(srv, &webClipboardService{
-		db: config.Db,
+		db:              db,
+		grpcMaxRecvSize: config.grpcMaxRecvSize,
 	})
 	return &Server{
-		tcpAddr: config.TcpAddr,
+		tcpAddr: addr,
 		srv:     srv,
 	}
 }

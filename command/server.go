@@ -56,7 +56,7 @@ func (s *serverCmd) run() cli.ActionFunc {
 			grpcMaxRecvBytes = defaultGrpcMaxRecvBytes
 		}
 
-		srv := server.NewServer(server.Config{TcpAddr: tcpAddr, Db: db, GrpcMaxRecvSize: grpcMaxRecvBytes})
+		srv := server.NewServer(tcpAddr, db, server.WithGrpcMaxRecvSize(grpcMaxRecvBytes))
 		sig := make(chan os.Signal, 1)
 		srvErr := make(chan error)
 		signal.Notify(sig, os.Interrupt, os.Kill, syscall.SIGTERM)

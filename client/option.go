@@ -22,7 +22,7 @@ func defaultConfig() *config {
 
 type Option func(*config)
 
-func WithChunkSize(n int64) Option {
+func WithTransferRate(n int64) Option {
 	return func(c *config) {
 		if n > 0 {
 			c.chunkSize = n

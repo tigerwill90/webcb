@@ -17,9 +17,17 @@ const (
 	DefaultWriteSize = 1 * 1024 * 1024
 )
 
+type ErrorType int32
+
+const (
+	InvalidOption = iota
+	KeyNotFound
+)
+
 type webClipboardService struct {
 	proto.UnsafeWebClipboardServer
-	db *storage.BadgerDB
+	db              *storage.BadgerDB
+	grpcMaxRecvSize int
 }
 
 func (s *webClipboardService) Config(_ context.Context, _ *emptypb.Empty) (*proto.ServerConfig, error) {
@@ -71,14 +79,23 @@ func (s *webClipboardService) Copy(server proto.WebClipboard_CopyServer) error {
 }
 
 func (s *webClipboardService) Paste(option *proto.PasteOption, server proto.WebClipboard_PasteServer) error {
-	if option.Length == 0 {
-		option.Length = DefaultWriteSize
+	if option.TransferRate == 0 {
+		option.TransferRate = DefaultWriteSize
 	}
-	fmt.Println("chunk size", option.Length)
+	fmt.Println("chunk size", option.TransferRate)
+
 	sender := newGrpcSender(server)
-	w := grpc.NewWriter(sender, make([]byte, option.Length))
+
+	if option.TransferRate > int64(s.grpcMaxRecvSize) {
+		return sender.SendError(errors.New("transfer rate is above the server configuration limit"), InvalidOption)
+	}
+
+	w := grpc.NewWriter(sender, make([]byte, option.TransferRate))
 	nr, err := s.db.ReadBatch(w, sender)
 	if err != nil {
+		if errors.Is(err, storage.ErrKeyNotFound) {
+			return sender.SendError(fmt.Errorf("no data to paste: %w", err), KeyNotFound)
+		}
 		return err
 	}
 
@@ -92,6 +109,15 @@ type grpcSender struct {
 
 func newGrpcSender(srv proto.WebClipboard_PasteServer) *grpcSender {
 	return &grpcSender{srv}
+}
+
+func (gp *grpcSender) SendError(err error, kind ErrorType) error {
+	return gp.srv.Send(&proto.PastStream{Data: &proto.PastStream_Error_{
+		Error: &proto.PastStream_Error{
+			Type:    proto.PastStream_Error_Type(kind),
+			Message: err.Error(),
+		},
+	}})
 }
 
 func (gp *grpcSender) Write(compressed, hasChecksum bool, salt, iv []byte) error {

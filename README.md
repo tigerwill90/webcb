@@ -1,3 +1,3 @@
-# wpc - the cross-platform copy/paste clipboard over internet
+# webcb - the cross-platform copy/paste clipboard over internet
 
 **WIP**
