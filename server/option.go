@@ -6,6 +6,8 @@ const (
 
 type config struct {
 	grpcMaxRecvSize int
+	ca, cert, key   []byte
+	dev             bool
 }
 
 func defaultOption() *config {
@@ -35,5 +37,24 @@ func WithGrpcMaxRecvSize(size int) Option {
 		if size > 0 {
 			c.grpcMaxRecvSize = size
 		}
+	})
+}
+
+func WithCredentials(cert, key []byte) Option {
+	return newImplOption(func(c *config) {
+		c.cert = cert
+		c.key = key
+	})
+}
+
+func WithCertificateAuthority(ca []byte) Option {
+	return newImplOption(func(c *config) {
+		c.ca = ca
+	})
+}
+
+func WithDevMode(enable bool) Option {
+	return newImplOption(func(c *config) {
+		c.dev = enable
 	})
 }

@@ -6,19 +6,13 @@ import "google/protobuf/empty.proto";
 
 option go_package = "github.com/tigerwill90/webcb/proto";
 
-message ServerConfig {
-  enum Secure {
-    TLS = 0;
-    M_TLS = 1;
-    NONE = 3;
-  }
-
+message ServerStatus {
   int64 db_size = 1;
   string db_path = 2;
   int64 grpc_max_receive_bytes = 3;
   int64 gc_interval = 4;
   bool dev_mode = 5;
-  Secure grpc_secure = 6;
+  bool grpc_m_tls = 6;
 }
 
 message Clipboard {
@@ -79,5 +73,5 @@ service WebClipboard {
   rpc Copy (stream CopyStream) returns (google.protobuf.Empty) {}
   rpc Paste (PasteOption) returns (stream PastStream) {}
   rpc Clean(google.protobuf.Empty) returns (google.protobuf.Empty) {}
-  rpc Config(google.protobuf.Empty) returns (ServerConfig) {}
+  rpc Status(google.protobuf.Empty) returns (ServerStatus) {}
 }

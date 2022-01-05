@@ -10,7 +10,6 @@ import (
 	"github.com/tigerwill90/webcb/client/copyopt"
 	"github.com/tigerwill90/webcb/client/pasteopt"
 	"github.com/tigerwill90/webcb/internal/crypto"
-	"github.com/tigerwill90/webcb/internal/enclave"
 	grpchelper "github.com/tigerwill90/webcb/internal/grpc"
 	"github.com/tigerwill90/webcb/proto"
 	"google.golang.org/grpc"
@@ -67,15 +66,10 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 		salt = randSalt
 		iv = randIv
 
-		e := enclave.New(config.Password)
-		pwd, destroy := e.Open()
-		defer destroy()
-
-		key, err := crypto.DeriveKey(pwd, salt)
+		key, err := crypto.DeriveKey(config.Password, salt)
 		if err != nil {
 			return err
 		}
-		destroy()
 
 		sw, err := crypto.NewStreamWriter(key, iv, w)
 		if err != nil {
@@ -193,15 +187,10 @@ func (c *Client) Paste(ctx context.Context, w io.Writer, opts ...pasteopt.Option
 		r = dec
 	}
 	if len(config.Password) > 0 && len(info.Iv) == aes.BlockSize && len(info.Salt) == crypto.SaltSize {
-		e := enclave.New(config.Password)
-		pwd, destroy := e.Open()
-		defer destroy()
-
-		key, err := crypto.DeriveKey(pwd, info.Salt)
+		key, err := crypto.DeriveKey(config.Password, info.Salt)
 		if err != nil {
 			return err
 		}
-		destroy()
 
 		sr, err := crypto.NewStreamReader(key, info.Iv, r)
 		if err != nil {
@@ -264,8 +253,8 @@ type ServerConfig struct {
 	DbSize int64
 }
 
-func (c *Client) Config(ctx context.Context) (*ServerConfig, error) {
-	config, err := c.c.Config(ctx, &emptypb.Empty{})
+func (c *Client) Status(ctx context.Context) (*ServerConfig, error) {
+	config, err := c.c.Status(ctx, &emptypb.Empty{})
 	if err != nil {
 		return nil, err
 	}

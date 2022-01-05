@@ -2,9 +2,13 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
+	"errors"
+	grpctls "github.com/tigerwill90/webcb/internal/tls"
 	"github.com/tigerwill90/webcb/proto"
 	"github.com/tigerwill90/webcb/storage"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"net"
 )
 
@@ -13,21 +17,36 @@ type Server struct {
 	srv     *grpc.Server
 }
 
-func NewServer(addr *net.TCPAddr, db *storage.BadgerDB, opts ...Option) *Server {
+func NewServer(addr *net.TCPAddr, db *storage.BadgerDB, opts ...Option) (*Server, error) {
 	config := defaultOption()
 	for _, opt := range opts {
 		opt.apply(config)
 	}
 
-	srv := grpc.NewServer(grpc.MaxRecvMsgSize(config.grpcMaxRecvSize))
+	options := []grpc.ServerOption{grpc.MaxRecvMsgSize(config.grpcMaxRecvSize)}
+	if !config.dev {
+		if len(config.cert) == 0 || len(config.key) == 0 {
+			return nil, errors.New("tls certificate is required in non dev mode environment")
+		}
+		tlsConfig := &tls.Config{
+			ClientAuth: tls.RequireAndVerifyClientCert,
+		}
+		if err := grpctls.LoadCertificate(config.ca, config.cert, config.key, tlsConfig); err != nil {
+			return nil, err
+		}
+		options = append(options, grpc.Creds(credentials.NewTLS(tlsConfig)))
+	}
+
+	srv := grpc.NewServer(options...)
 	proto.RegisterWebClipboardServer(srv, &webClipboardService{
-		db:              db,
-		grpcMaxRecvSize: config.grpcMaxRecvSize,
+		db:     db,
+		config: config,
 	})
+
 	return &Server{
 		tcpAddr: addr,
 		srv:     srv,
-	}
+	}, nil
 }
 
 func (s *Server) Start() error {

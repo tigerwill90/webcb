@@ -25,29 +25,57 @@ func newServerCmd() *serverCmd {
 
 func (s *serverCmd) run() cli.ActionFunc {
 	return func(cc *cli.Context) error {
-		tcpAddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(cc.String("host"), strconv.FormatUint(cc.Uint64("port"), 10)))
+		tcpAddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(cc.String(host), strconv.FormatUint(cc.Uint64(port), 10)))
 		if err != nil {
 			return err
 		}
 
-		gcInterval := cc.Duration("gc-interval")
-		if gcInterval < storage.MinGcDuration {
-			gcInterval = storage.MinGcDuration
+		dbGcInterval := cc.Duration(gcInterval)
+		if dbGcInterval < storage.MinGcDuration {
+			dbGcInterval = storage.MinGcDuration
 		}
 
 		dbLogger := hclog.New(hclog.DefaultOptions).Named("db")
 		dbLogger.SetLevel(hclog.Trace)
 		db, err := storage.NewBadgerDB(&storage.BadgerConfig{
 			InMemory:   false,
-			GcInterval: gcInterval,
-			Path:       cc.String("path"),
+			GcInterval: dbGcInterval,
+			Path:       cc.String(dbPath),
 		}, dbLogger)
 		if err != nil {
 			return err
 		}
 		defer db.Close()
 
-		srv := server.NewServer(tcpAddr, db, server.WithGrpcMaxRecvSize(cc.Int("grpc-max-receive-bytes")))
+		var ca, cert, key []byte
+		if !cc.Bool(devMode) {
+			if cc.String(tlsCa) != "" {
+				ca, err = os.ReadFile(cc.String(tlsCa))
+				if err != nil {
+					return fmt.Errorf("unable to read root certificate: %w", err)
+				}
+			}
+			cert, err = os.ReadFile(cc.String(tlsCert))
+			if err != nil {
+				return fmt.Errorf("unable to read certificate: %w", err)
+			}
+			key, err = os.ReadFile(cc.String(tlsKey))
+			if err != nil {
+				return fmt.Errorf("unable to read certificate key: %w", err)
+			}
+		}
+
+		srv, err := server.NewServer(
+			tcpAddr,
+			db,
+			server.WithGrpcMaxRecvSize(cc.Int(grpcMaxReceivedBytes)),
+			server.WithCredentials(cert, key),
+			server.WithCertificateAuthority(ca),
+			server.WithDevMode(cc.Bool(devMode)),
+		)
+		if err != nil {
+			return err
+		}
 		sig := make(chan os.Signal, 1)
 		srvErr := make(chan error)
 		signal.Notify(sig, os.Interrupt, os.Kill, syscall.SIGTERM)
@@ -60,7 +88,9 @@ func (s *serverCmd) run() cli.ActionFunc {
 		select {
 		case <-sig:
 		case err := <-srvErr:
-			log.Println(err)
+			if err != nil {
+				log.Println(err)
+			}
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/docker/go-units"
 	"github.com/tigerwill90/webcb/client"
 	grpctls "github.com/tigerwill90/webcb/internal/tls"
 	"github.com/urfave/cli/v2"
@@ -16,15 +17,15 @@ import (
 	"strconv"
 )
 
-type cleanCmd struct{}
+type statusCmd struct{}
 
-func newCleanCommand() *cleanCmd {
-	return &cleanCmd{}
+func newStatusCommand() *statusCmd {
+	return &statusCmd{}
 }
 
-func (c *cleanCmd) run() cli.ActionFunc {
+func (s *statusCmd) run() cli.ActionFunc {
 	return func(cc *cli.Context) error {
-		tcpAddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(cc.String("host"), strconv.FormatUint(cc.Uint64("port"), 10)))
+		tcpAddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(cc.String(host), strconv.FormatUint(cc.Uint64(port), 10)))
 		if err != nil {
 			return err
 		}
@@ -35,6 +36,7 @@ func (c *cleanCmd) run() cli.ActionFunc {
 		}
 
 		var options []grpc.DialOption
+
 		if cc.Bool(connInsecure) {
 			options = append(options, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		} else {
@@ -86,6 +88,11 @@ func (c *cleanCmd) run() cli.ActionFunc {
 
 		c := client.New(conn)
 
-		return c.Clean(context.Background())
+		serverStatus, err := c.Status(context.Background())
+		if err != nil {
+			return err
+		}
+		fmt.Printf("db size: %s\n", units.HumanSize(float64(serverStatus.DbSize)))
+		return nil
 	}
 }

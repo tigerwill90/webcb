@@ -26,19 +26,19 @@ const (
 
 type webClipboardService struct {
 	proto.UnsafeWebClipboardServer
-	db              *storage.BadgerDB
-	grpcMaxRecvSize int
+	db     *storage.BadgerDB
+	config *config
 }
 
-func (s *webClipboardService) Config(_ context.Context, _ *emptypb.Empty) (*proto.ServerConfig, error) {
+func (s *webClipboardService) Status(_ context.Context, _ *emptypb.Empty) (*proto.ServerStatus, error) {
 	lsm, vlog := s.db.Size()
-	return &proto.ServerConfig{
+	return &proto.ServerStatus{
 		DbSize:              lsm + vlog,
 		DbPath:              "",
-		GrpcMaxReceiveBytes: 0,
+		GrpcMaxReceiveBytes: int64(s.config.grpcMaxRecvSize),
 		GcInterval:          0,
-		DevMode:             false,
-		GrpcSecure:          0,
+		DevMode:             s.config.dev,
+		GrpcMTls:            len(s.config.key) > 0 && len(s.config.cert) > 0,
 	}, nil
 }
 
@@ -86,7 +86,7 @@ func (s *webClipboardService) Paste(option *proto.PasteOption, server proto.WebC
 
 	sender := newGrpcSender(server)
 
-	if option.TransferRate > int64(s.grpcMaxRecvSize) {
+	if option.TransferRate > int64(s.config.grpcMaxRecvSize) {
 		return sender.SendError(errors.New("transfer rate is above the server configuration limit"), InvalidOption)
 	}
 

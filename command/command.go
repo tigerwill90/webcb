@@ -20,6 +20,28 @@ func init() {
 	rand.Seed(int64(binary.LittleEndian.Uint64(b[:])))
 }
 
+const (
+	host                 = "host"
+	port                 = "port"
+	tlsCert              = "cert"
+	tlsKey               = "key"
+	tlsCa                = "ca"
+	connInsecure         = "insecure"
+	connTimeout          = "conn-timeout"
+	devMode              = "dev"
+	grpcMaxReceivedBytes = "grpc-max-receive-bytes"
+	gcInterval           = "gc-interval"
+	dbPath               = "path"
+	timeout              = "timeout"
+	transferRate         = "transfer-rate"
+	checksum             = "checksum"
+	ttl                  = "ttl"
+	verbose              = "verbose"
+	compress             = "compress"
+	password             = "password"
+	discard              = "discard"
+)
+
 func Run(args []string) int {
 	app := &cli.App{
 		Name:        "webcb",
@@ -28,25 +50,41 @@ func Run(args []string) int {
 		Version:     "v0.0.0",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:  "host",
+				Name:  host,
 				Value: "0.0.0.0",
 			},
 			&cli.Uint64Flag{
-				Name:  "port",
+				Name:  port,
 				Value: 4444,
+			},
+			&cli.StringFlag{
+				Name: tlsCert,
+			},
+			&cli.StringFlag{
+				Name: tlsKey,
+			},
+			&cli.StringFlag{
+				Name: tlsCa,
 			},
 		},
 		Commands: []*cli.Command{
 			{
-				Name:  "config",
-				Usage: "show server config",
+				Name:  "status",
+				Usage: "show server status",
 				Flags: []cli.Flag{
 					&cli.DurationFlag{
-						Name:  "conn-timeout",
+						Name:  connTimeout,
 						Value: defaultClientConnTimeout,
 					},
+					&cli.BoolFlag{
+						Name: connInsecure,
+					},
+					&cli.DurationFlag{
+						Name:        timeout,
+						DefaultText: "0s - no timeout",
+					},
 				},
-				Action: newConfigCommand().run(),
+				Action: newStatusCommand().run(),
 			},
 			{
 				Name:    "serve",
@@ -54,19 +92,19 @@ func Run(args []string) int {
 				Usage:   "run a webcb server",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
-						Name:  "dev",
+						Name:  devMode,
 						Usage: "start a wpc server in dev mode",
 					},
 					&cli.IntFlag{
-						Name:  "grpc-max-receive-bytes",
+						Name:  grpcMaxReceivedBytes,
 						Value: server.DefaultGrpcMaxRecvSize,
 					},
 					&cli.DurationFlag{
-						Name:  "gc-interval",
+						Name:  gcInterval,
 						Value: 5 * time.Minute,
 					},
 					&cli.StringFlag{
-						Name:  "path",
+						Name:  dbPath,
 						Value: "db",
 					},
 				},
@@ -78,34 +116,34 @@ func Run(args []string) int {
 				Usage:   "copy to web clipboard",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:    "transfer-rate",
+						Name:    transferRate,
 						Aliases: []string{"rate"},
 						Value:   "1048576b",
 					},
 					&cli.DurationFlag{
-						Name:        "timeout",
+						Name:        timeout,
 						DefaultText: "0s - no timeout",
 					},
 					&cli.DurationFlag{
-						Name:  "conn-timeout",
+						Name:  connTimeout,
 						Value: defaultClientConnTimeout,
 					},
 					&cli.BoolFlag{
-						Name:    "checksum",
+						Name:    checksum,
 						Aliases: []string{"sum"},
 					},
 					&cli.DurationFlag{
-						Name:  "ttl",
+						Name:  ttl,
 						Value: server.DefaultTtl,
 					},
 					&cli.BoolFlag{
-						Name: "verbose",
+						Name: verbose,
 					},
 					&cli.BoolFlag{
-						Name: "compress",
+						Name: compress,
 					},
 					&cli.StringFlag{
-						Name:    "password",
+						Name:    password,
 						Aliases: []string{"pwd"},
 					},
 				},
@@ -117,27 +155,27 @@ func Run(args []string) int {
 				Usage:   "paste from web clipboard",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:    "transfer-rate",
+						Name:    transferRate,
 						Aliases: []string{"rate"},
 						Value:   "1048576b",
 					},
 					&cli.DurationFlag{
-						Name:        "timeout",
+						Name:        timeout,
 						DefaultText: "0s - no timeout",
 					},
 					&cli.DurationFlag{
-						Name:  "conn-timeout",
+						Name:  connTimeout,
 						Value: defaultClientConnTimeout,
 					},
 					&cli.BoolFlag{
-						Name: "verbose",
+						Name: verbose,
 					},
 					&cli.BoolFlag{
-						Name:  "discard",
+						Name:  discard,
 						Usage: "discard the clipboard stream output (for testing purpose)",
 					},
 					&cli.StringFlag{
-						Name:    "password",
+						Name:    password,
 						Aliases: []string{"pwd"},
 					},
 				},
@@ -147,7 +185,7 @@ func Run(args []string) int {
 				Name: "clean",
 				Flags: []cli.Flag{
 					&cli.DurationFlag{
-						Name:  "conn-timeout",
+						Name:  connTimeout,
 						Value: defaultClientConnTimeout,
 					},
 				},
