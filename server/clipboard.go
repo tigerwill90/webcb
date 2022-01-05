@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	DefaultTtl       = 10 * time.Minute
-	DefaultWriteSize = 1 * 1024 * 1024
+	DefaultTtl          = 10 * time.Minute
+	DefaultTransferRate = 1 << 20
 )
 
 type ErrorType int32
@@ -80,7 +80,7 @@ func (s *webClipboardService) Copy(server proto.WebClipboard_CopyServer) error {
 
 func (s *webClipboardService) Paste(option *proto.PasteOption, server proto.WebClipboard_PasteServer) error {
 	if option.TransferRate == 0 {
-		option.TransferRate = DefaultWriteSize
+		option.TransferRate = DefaultTransferRate
 	}
 	fmt.Println("chunk size", option.TransferRate)
 

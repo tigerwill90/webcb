@@ -8,6 +8,7 @@ import (
 	"github.com/docker/go-units"
 	"github.com/gen2brain/beeep"
 	"github.com/tigerwill90/webcb/client"
+	"github.com/tigerwill90/webcb/client/pasteopt"
 	"github.com/urfave/cli/v2"
 	"google.golang.org/grpc"
 	"io"
@@ -63,13 +64,18 @@ func (s *pasteCmd) run() cli.ActionFunc {
 			stdout = io.Discard
 		}
 
-		c := client.New(conn, client.WithTransferRate(chunkSize), client.WithPassword(cc.String("password")))
+		c := client.New(conn)
 
 		sig := make(chan os.Signal, 2)
 		pastErr := make(chan error)
 		signal.Notify(sig, os.Interrupt, os.Kill)
 		go func() {
-			pastErr <- c.Paste(pasteCtx, stdout)
+			pastErr <- c.Paste(
+				pasteCtx,
+				stdout,
+				pasteopt.WithPassword(cc.String("password")),
+				pasteopt.WithTransferRate(chunkSize),
+			)
 		}()
 
 		select {

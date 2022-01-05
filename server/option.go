@@ -1,12 +1,16 @@
 package server
 
+const (
+	DefaultGrpcMaxRecvSize = 200 << 20
+)
+
 type config struct {
 	grpcMaxRecvSize int
 }
 
 func defaultOption() *config {
 	return &config{
-		grpcMaxRecvSize: 200 * 1024 * 1024,
+		grpcMaxRecvSize: DefaultGrpcMaxRecvSize,
 	}
 }
 
@@ -28,6 +32,8 @@ func newImplOption(f func(*config)) *implOption {
 
 func WithGrpcMaxRecvSize(size int) Option {
 	return newImplOption(func(c *config) {
-		c.grpcMaxRecvSize = size
+		if size > 0 {
+			c.grpcMaxRecvSize = size
+		}
 	})
 }

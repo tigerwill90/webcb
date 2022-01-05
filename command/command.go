@@ -59,7 +59,7 @@ func Run(args []string) int {
 					},
 					&cli.IntFlag{
 						Name:  "grpc-max-receive-bytes",
-						Value: defaultGrpcMaxRecvBytes,
+						Value: server.DefaultGrpcMaxRecvSize,
 					},
 					&cli.DurationFlag{
 						Name:  "gc-interval",

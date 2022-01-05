@@ -7,6 +7,8 @@ import (
 	"crypto/sha256"
 	"errors"
 	"github.com/klauspost/compress/zstd"
+	"github.com/tigerwill90/webcb/client/copyopt"
+	"github.com/tigerwill90/webcb/client/pasteopt"
 	"github.com/tigerwill90/webcb/internal/crypto"
 	"github.com/tigerwill90/webcb/internal/enclave"
 	grpchelper "github.com/tigerwill90/webcb/internal/grpc"
@@ -19,31 +21,21 @@ import (
 )
 
 type Client struct {
-	c           proto.WebClipboardClient
-	chunkSize   int64
-	checksum    bool
-	ttl         time.Duration
-	compression bool
-	password    []byte
+	c proto.WebClipboardClient
 }
 
-func New(conn grpc.ClientConnInterface, opts ...Option) *Client {
-	config := defaultConfig()
-	for _, opt := range opts {
-		opt(config)
-	}
-
+func New(conn grpc.ClientConnInterface) *Client {
 	return &Client{
-		c:           proto.NewWebClipboardClient(conn),
-		chunkSize:   config.chunkSize,
-		checksum:    config.checksum,
-		ttl:         config.ttl,
-		compression: config.compression,
-		password:    config.password,
+		c: proto.NewWebClipboardClient(conn),
 	}
 }
 
-func (c *Client) Copy(ctx context.Context, r io.Reader) error {
+func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) error {
+	config := copyopt.DefaultConfig()
+	for _, opt := range opts {
+		opt.Apply(config)
+	}
+
 	stream, err := c.c.Copy(ctx)
 	if err != nil {
 		return err
@@ -52,10 +44,10 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 	hasher := sha256.New()
 	defer hasher.Reset()
 
-	gw := grpchelper.NewWriter(newGrpcSender(stream), make([]byte, c.chunkSize))
+	gw := grpchelper.NewWriter(newGrpcSender(stream), make([]byte, config.ChunkSize))
 	w := io.Writer(gw)
 	var enc *zstd.Encoder
-	if c.compression {
+	if config.Compression {
 		enc, err = zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedFastest))
 		if err != nil {
 			return err
@@ -66,7 +58,7 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 
 	var salt []byte
 	var iv []byte
-	if len(c.password) > 0 {
+	if len(config.Password) > 0 {
 		randSalt := make([]byte, crypto.SaltSize)
 		rand.Read(randSalt)
 		randIv := make([]byte, aes.BlockSize)
@@ -75,7 +67,7 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 		salt = randSalt
 		iv = randIv
 
-		e := enclave.New(c.password)
+		e := enclave.New(config.Password)
 		pwd, destroy := e.Open()
 		defer destroy()
 
@@ -93,13 +85,13 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 		w = sw
 	}
 
-	if err := sendInfo(stream, c.ttl, c.compression, iv, salt); err != nil {
+	if err := sendInfo(stream, config.Ttl, config.Compression, iv, salt); err != nil {
 		return err
 	}
 
-	buf := make([]byte, c.chunkSize)
+	buf := make([]byte, config.ChunkSize)
 	for {
-		n, err := io.ReadAtLeast(r, buf, int(c.chunkSize))
+		n, err := io.ReadAtLeast(r, buf, int(config.ChunkSize))
 		if err != nil {
 			// The error is EOF only if no bytes were read
 			if errors.Is(err, io.EOF) {
@@ -116,7 +108,7 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 						return err
 					}
 				}
-				if c.checksum {
+				if config.Checksum {
 					if _, err := hasher.Write(buf[:n]); err != nil {
 						return err
 					}
@@ -130,7 +122,7 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 		if _, err := w.Write(buf[:n]); err != nil {
 			return err
 		}
-		if c.checksum {
+		if config.Checksum {
 			if _, err := hasher.Write(buf[:n]); err != nil {
 				return err
 			}
@@ -138,7 +130,7 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 	}
 
 	var checksum []byte
-	if c.checksum {
+	if config.Checksum {
 		checksum = hasher.Sum(nil)
 	}
 	if err := gw.Flush(checksum); err != nil {
@@ -152,8 +144,13 @@ func (c *Client) Copy(ctx context.Context, r io.Reader) error {
 	return nil
 }
 
-func (c *Client) Paste(ctx context.Context, w io.Writer) error {
-	resp, err := c.c.Paste(ctx, &proto.PasteOption{TransferRate: c.chunkSize}, grpc.MaxCallRecvMsgSize(int(c.chunkSize+1000)))
+func (c *Client) Paste(ctx context.Context, w io.Writer, opts ...pasteopt.Option) error {
+	config := pasteopt.DefaultConfig()
+	for _, opt := range opts {
+		opt.Apply(config)
+	}
+
+	resp, err := c.c.Paste(ctx, &proto.PasteOption{TransferRate: config.ChunkSize}, grpc.MaxCallRecvMsgSize(int(config.ChunkSize+1000)))
 	if err != nil {
 		return err
 	}
@@ -181,7 +178,7 @@ func (c *Client) Paste(ctx context.Context, w io.Writer) error {
 		return errors.New(pasteErr.Message)
 	}
 
-	if len(c.password) == 0 && (len(info.Iv) != 0 || len(info.Salt) != 0) {
+	if len(config.Password) == 0 && (len(info.Iv) != 0 || len(info.Salt) != 0) {
 		return errors.New("data is encrypted but no password provided")
 	}
 
@@ -195,8 +192,8 @@ func (c *Client) Paste(ctx context.Context, w io.Writer) error {
 		defer dec.Close()
 		r = dec
 	}
-	if len(c.password) > 0 && len(info.Iv) == aes.BlockSize && len(info.Salt) == crypto.SaltSize {
-		e := enclave.New(c.password)
+	if len(config.Password) > 0 && len(info.Iv) == aes.BlockSize && len(info.Salt) == crypto.SaltSize {
+		e := enclave.New(config.Password)
 		pwd, destroy := e.Open()
 		defer destroy()
 
@@ -213,7 +210,7 @@ func (c *Client) Paste(ctx context.Context, w io.Writer) error {
 		r = sr
 	}
 
-	buf := make([]byte, c.chunkSize)
+	buf := make([]byte, config.ChunkSize)
 	for {
 		n, err := r.Read(buf)
 		if err != nil {

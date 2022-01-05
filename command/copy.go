@@ -8,6 +8,7 @@ import (
 	"github.com/awnumar/memguard"
 	"github.com/docker/go-units"
 	"github.com/tigerwill90/webcb/client"
+	"github.com/tigerwill90/webcb/client/copyopt"
 	"github.com/urfave/cli/v2"
 	"google.golang.org/grpc"
 	"net"
@@ -65,16 +66,17 @@ func (s *copyCmd) run() cli.ActionFunc {
 		copyErr := make(chan error)
 		signal.Notify(sig, os.Interrupt, os.Kill)
 
-		c := client.New(
-			conn,
-			client.WithTransferRate(chunkSize),
-			client.WithChecksum(cc.Bool("checksum")),
-			client.WithTtl(cc.Duration("ttl")),
-			client.WithCompression(cc.Bool("compress")),
-			client.WithPassword(cc.String("password")),
-		)
+		c := client.New(conn)
 		go func() {
-			copyErr <- c.Copy(copyCtx, bufio.NewReader(os.Stdin))
+			copyErr <- c.Copy(
+				copyCtx,
+				bufio.NewReader(os.Stdin),
+				copyopt.WithTransferRate(chunkSize),
+				copyopt.WithChecksum(cc.Bool("checksum")),
+				copyopt.WithTtl(cc.Duration("ttl")),
+				copyopt.WithCompression(cc.Bool("compress")),
+				copyopt.WithPassword(cc.String("password")),
+			)
 		}()
 
 		select {

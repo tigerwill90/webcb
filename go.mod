@@ -12,7 +12,7 @@ require (
 	github.com/klauspost/compress v1.13.6
 	github.com/oklog/ulid/v2 v2.0.2
 	github.com/urfave/cli/v2 v2.3.0
-	google.golang.org/grpc v1.41.0
+	google.golang.org/grpc v1.43.0
 	google.golang.org/protobuf v1.27.1
 )
 
@@ -26,11 +26,11 @@ require (
 	github.com/godbus/dbus/v5 v5.0.6 // indirect
 	github.com/golang/glog v1.0.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/gopherjs/gopherjs v0.0.0-20211023200351-1e6abe791855 // indirect
-	github.com/mattn/go-colorable v0.1.11 // indirect
-	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
-	golang.org/x/net v0.0.0-20211020060615-d418f374d309 // indirect
-	golang.org/x/sys v0.0.0-20211030160813-b3129d9d1021 // indirect
+	github.com/gopherjs/gopherjs v0.0.0-20220104163920-15ed2e8cf2bd // indirect
+	github.com/mattn/go-colorable v0.1.12 // indirect
+	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3
+	golang.org/x/net v0.0.0-20211216030914-fe4d6282115f // indirect
+	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
 	golang.org/x/text v0.3.7 // indirect
-	google.golang.org/genproto v0.0.0-20211021150943-2b146023228c // indirect
+	google.golang.org/genproto v0.0.0-20211223182754-3ac035c7e7cb // indirect
 )
