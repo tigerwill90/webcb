@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/awnumar/memguard"
 	"github.com/docker/go-units"
 	"github.com/tigerwill90/webcb/client"
 	"github.com/tigerwill90/webcb/client/copyopt"
@@ -33,7 +32,6 @@ const defaultClientConnTimeout = 5 * time.Second
 
 func (s *copyCmd) run() cli.ActionFunc {
 	return func(cc *cli.Context) error {
-		defer memguard.Purge()
 		tcpAddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(cc.String(host), strconv.FormatUint(cc.Uint64(port), 10)))
 		if err != nil {
 			return err

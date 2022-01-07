@@ -70,7 +70,7 @@ func Run(args []string) int {
 		Commands: []*cli.Command{
 			{
 				Name:  "status",
-				Usage: "show server status",
+				Usage: "Show server status",
 				Flags: []cli.Flag{
 					&cli.DurationFlag{
 						Name:  connTimeout,
@@ -89,7 +89,7 @@ func Run(args []string) int {
 			{
 				Name:    "serve",
 				Aliases: []string{"s"},
-				Usage:   "run a webcb server",
+				Usage:   "Run a webcb server",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:  devMode,
@@ -101,7 +101,7 @@ func Run(args []string) int {
 					},
 					&cli.DurationFlag{
 						Name:  gcInterval,
-						Value: 5 * time.Minute,
+						Value: 3 * time.Minute,
 					},
 					&cli.StringFlag{
 						Name:  dbPath,
@@ -113,7 +113,7 @@ func Run(args []string) int {
 			{
 				Name:    "copy",
 				Aliases: []string{"c"},
-				Usage:   "copy to web clipboard",
+				Usage:   "Copy to web clipboard",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:    transferRate,
@@ -146,13 +146,16 @@ func Run(args []string) int {
 						Name:    password,
 						Aliases: []string{"pwd"},
 					},
+					&cli.BoolFlag{
+						Name: connInsecure,
+					},
 				},
 				Action: newCopyCommand().run(),
 			},
 			{
 				Name:    "paste",
 				Aliases: []string{"p"},
-				Usage:   "paste from web clipboard",
+				Usage:   "Paste from web clipboard",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:    transferRate,
@@ -178,15 +181,22 @@ func Run(args []string) int {
 						Name:    password,
 						Aliases: []string{"pwd"},
 					},
+					&cli.BoolFlag{
+						Name: connInsecure,
+					},
 				},
 				Action: newPasteCommand().run(),
 			},
 			{
-				Name: "clean",
+				Name:  "clean",
+				Usage: "Clear the clipboard",
 				Flags: []cli.Flag{
 					&cli.DurationFlag{
 						Name:  connTimeout,
 						Value: defaultClientConnTimeout,
+					},
+					&cli.BoolFlag{
+						Name: connInsecure,
 					},
 				},
 				Action: newCleanCommand().run(),

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/hashicorp/go-hclog"
 	"github.com/tigerwill90/webcb/internal/grpc"
 	"github.com/tigerwill90/webcb/proto"
 	"github.com/tigerwill90/webcb/storage"
@@ -28,22 +29,34 @@ type webClipboardService struct {
 	proto.UnsafeWebClipboardServer
 	db     *storage.BadgerDB
 	config *config
+	logger hclog.Logger
 }
 
-func (s *webClipboardService) Status(_ context.Context, _ *emptypb.Empty) (*proto.ServerStatus, error) {
+func (s *webClipboardService) Status(ctx context.Context, _ *emptypb.Empty) (*proto.ServerStatus, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
 	lsm, vlog := s.db.Size()
 	return &proto.ServerStatus{
 		DbSize:              lsm + vlog,
-		DbPath:              "",
+		DbPath:              s.db.Path(),
 		GrpcMaxReceiveBytes: int64(s.config.grpcMaxRecvSize),
-		GcInterval:          0,
-		DevMode:             s.config.dev,
+		GcInterval:          int64(s.db.GcInterval()),
+		DevMode:             false,
 		GrpcMTls:            len(s.config.key) > 0 && len(s.config.cert) > 0,
 	}, nil
 }
 
-func (s *webClipboardService) Clean(_ context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
+func (s *webClipboardService) Clean(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
 	if err := s.db.DropAll(); err != nil {
+		s.logger.Error(err.Error())
 		return nil, err
 	}
 	return &emptypb.Empty{}, nil
@@ -52,6 +65,7 @@ func (s *webClipboardService) Clean(_ context.Context, _ *emptypb.Empty) (*empty
 func (s *webClipboardService) Copy(server proto.WebClipboard_CopyServer) error {
 	req, err := server.Recv()
 	if err != nil {
+		s.logger.Error(err.Error())
 		return err
 	}
 
@@ -70,6 +84,7 @@ func (s *webClipboardService) Copy(server proto.WebClipboard_CopyServer) error {
 	r := grpc.NewReader(newGrpcReceiver(server))
 	n, err := s.db.WriteBatch(r, ttl, fi.Compressed, fi.Iv, fi.Salt)
 	if err != nil {
+		s.logger.Error(err.Error())
 		return err
 	}
 
@@ -96,6 +111,7 @@ func (s *webClipboardService) Paste(option *proto.PasteOption, server proto.WebC
 		if errors.Is(err, storage.ErrKeyNotFound) {
 			return sender.SendError(fmt.Errorf("no data to paste: %w", err), KeyNotFound)
 		}
+		s.logger.Error(err.Error())
 		return err
 	}
 

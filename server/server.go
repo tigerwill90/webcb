@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"github.com/hashicorp/go-hclog"
 	grpctls "github.com/tigerwill90/webcb/internal/tls"
 	"github.com/tigerwill90/webcb/proto"
 	"github.com/tigerwill90/webcb/storage"
@@ -17,7 +18,7 @@ type Server struct {
 	srv     *grpc.Server
 }
 
-func NewServer(addr *net.TCPAddr, db *storage.BadgerDB, opts ...Option) (*Server, error) {
+func NewServer(addr *net.TCPAddr, db *storage.BadgerDB, logger hclog.Logger, opts ...Option) (*Server, error) {
 	config := defaultOption()
 	for _, opt := range opts {
 		opt.apply(config)
@@ -41,6 +42,7 @@ func NewServer(addr *net.TCPAddr, db *storage.BadgerDB, opts ...Option) (*Server
 	proto.RegisterWebClipboardServer(srv, &webClipboardService{
 		db:     db,
 		config: config,
+		logger: logger,
 	})
 
 	return &Server{

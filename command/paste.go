@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/awnumar/memguard"
 	"github.com/docker/go-units"
 	"github.com/gen2brain/beeep"
 	"github.com/tigerwill90/webcb/client"
@@ -30,7 +29,6 @@ func newPasteCommand() *pasteCmd {
 
 func (s *pasteCmd) run() cli.ActionFunc {
 	return func(cc *cli.Context) error {
-		defer memguard.Purge()
 		tcpAddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(cc.String(host), strconv.FormatUint(cc.Uint64(port), 10)))
 		if err != nil {
 			return err
@@ -107,7 +105,7 @@ func (s *pasteCmd) run() cli.ActionFunc {
 		defer pasteCancel()
 
 		var stdout io.Writer = os.Stdout
-		if cc.Bool("discard") {
+		if cc.Bool(discard) {
 			stdout = io.Discard
 		}
 

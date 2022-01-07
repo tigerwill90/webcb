@@ -203,7 +203,7 @@ func (c *Client) Paste(ctx context.Context, w io.Writer, opts ...pasteopt.Option
 	for {
 		n, err := r.Read(buf)
 		if err != nil {
-			if !errors.Is(err, io.EOF) {
+			if !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 				return err
 			}
 

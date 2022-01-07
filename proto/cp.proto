@@ -25,6 +25,10 @@ message Clipboard {
   int64 size = 7;
 }
 
+message LockedTransaction {
+  map<string,bytes> versions = 1;
+}
+
 message PasteOption {
   int64 transfer_rate = 1;
 }

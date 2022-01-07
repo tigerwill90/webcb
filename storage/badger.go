@@ -17,11 +17,13 @@ import (
 )
 
 const (
-	chunkSize     = 64 * 1024
-	latestKey     = "latest"
-	versionKey    = "version"
-	chunkSuffix   = "chunk"
-	MinGcDuration = 1 * time.Minute
+	chunkSize        = 64 * 1024
+	latestKey        = "LATEST"
+	versionKey       = "VERSION"
+	pendingTxnKey    = "PENDING"
+	chunkSuffix      = "chunk"
+	MinGcDuration    = 1 * time.Minute
+	ValueLogFileSize = 500 << 20
 )
 
 type BadgerConfig struct {
@@ -32,15 +34,17 @@ type BadgerConfig struct {
 }
 
 type BadgerDB struct {
-	db         *badger.DB
-	gcInterval *time.Ticker
-	logger     hclog.Logger
-	config     *BadgerConfig
-	seq        *badger.Sequence
-	entropy    *ulid.MonotonicEntropy
-	t          time.Time
-	valueSize  int
-	lockedULID sync.Mutex
+	db                *badger.DB
+	gcInterval        *time.Ticker
+	logger            hclog.Logger
+	config            *BadgerConfig
+	seq               *badger.Sequence
+	entropy           *ulid.MonotonicEntropy
+	t                 time.Time
+	valueLogFileSize  int
+	chunkSize         int
+	lockedULID        sync.Mutex
+	lockedTransaction sync.Mutex
 	sync.RWMutex
 }
 
@@ -49,6 +53,7 @@ var ErrKeyNotFound = errors.New("key not found")
 func (b *BadgerDB) DropAll() error {
 	b.Lock()
 	defer b.Unlock()
+	b.logger.Warn("dropping clipboard data")
 	return b.db.DropAll()
 }
 
@@ -64,6 +69,7 @@ type HeaderWriter interface {
 func (b *BadgerDB) ReadBatch(sw StreamWriter, hw HeaderWriter) (int, error) {
 	b.RLock()
 	defer b.RUnlock()
+	b.logger.Trace("sending clipboard stream to client")
 	read := 0
 	err := b.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte(latestKey))
@@ -126,13 +132,18 @@ type StreamReader interface {
 func (b *BadgerDB) WriteBatch(r StreamReader, ttl time.Duration, compressed bool, iv []byte, salt []byte) (int, error) {
 	b.RLock()
 	defer b.RUnlock()
-	buf := make([]byte, b.valueSize)
+	b.logger.Trace("receiving clipboard stream from client")
+	buf := make([]byte, b.chunkSize)
 	version, err := b.seq.Next()
 	if err != nil {
 		return 0, err
 	}
-	batch := b.db.NewWriteBatch()
-	defer batch.Cancel()
+	batch := b.NewBatchWriter(version)
+	defer func() {
+		if err := batch.Release(); err != nil {
+			b.logger.Error(fmt.Sprintf("unable to unlock transaction: %s", err))
+		}
+	}()
 	written := 0
 	for {
 		nr, err := r.Read(buf)
@@ -141,9 +152,12 @@ func (b *BadgerDB) WriteBatch(r StreamReader, ttl time.Duration, compressed bool
 				return 0, err
 			}
 			if nr > 0 {
-				key := fmt.Sprintf("%d/%s/%s", version, b.mustNewULID(), chunkSuffix)
+				key := []byte(fmt.Sprintf("%d/%s/%s", version, b.mustNewULID(), chunkSuffix))
 				valCopy := append(buf[:0:0], buf[:nr]...)
-				e := badger.NewEntry([]byte(key), valCopy)
+				if err := batch.Validate(key, valCopy); err != nil {
+					return 0, err
+				}
+				e := badger.NewEntry(key, valCopy)
 				if err := batch.SetEntry(e); err != nil {
 					return 0, err
 				}
@@ -151,9 +165,12 @@ func (b *BadgerDB) WriteBatch(r StreamReader, ttl time.Duration, compressed bool
 			}
 			break
 		}
-		key := fmt.Sprintf("%d/%s/%s", version, b.mustNewULID(), chunkSuffix)
+		key := []byte(fmt.Sprintf("%d/%s/%s", version, b.mustNewULID(), chunkSuffix))
 		valCopy := append(buf[:0:0], buf[:nr]...)
-		e := badger.NewEntry([]byte(key), valCopy)
+		if err := batch.Validate(key, valCopy); err != nil {
+			return 0, err
+		}
+		e := badger.NewEntry(key, valCopy)
 		if err := batch.SetEntry(e); err != nil {
 			return 0, err
 		}
@@ -174,7 +191,11 @@ func (b *BadgerDB) WriteBatch(r StreamReader, ttl time.Duration, compressed bool
 	if err != nil {
 		return 0, err
 	}
-	e := badger.NewEntry([]byte(latestKey), value).WithTTL(ttl)
+	key := []byte(latestKey)
+	if err := batch.Validate(key, value); err != nil {
+		return 0, err
+	}
+	e := badger.NewEntry(key, value).WithTTL(ttl)
 	if err := batch.SetEntry(e); err != nil {
 		return 0, err
 	}
@@ -190,6 +211,18 @@ func (b *BadgerDB) Size() (lsm int64, vlog int64) {
 	b.RLock()
 	defer b.RUnlock()
 	return b.db.Size()
+}
+
+func (b *BadgerDB) Path() string {
+	return b.config.Path
+}
+
+func (b *BadgerDB) InMemory() bool {
+	return b.config.InMemory
+}
+
+func (b *BadgerDB) GcInterval() time.Duration {
+	return b.config.GcInterval
 }
 
 func (b *BadgerDB) runGC(discardRatio float64) error {
@@ -211,9 +244,23 @@ func getIndex(item *badger.Item) ([]byte, error) {
 	return []byte(fmt.Sprintf("%d/", cb.Sequence)), nil
 }
 
+func getLockedTransaction(item *badger.Item) (map[string][]byte, error) {
+	if item == nil {
+		return make(map[string][]byte), nil
+	}
+	lockedTransaction := new(proto.LockedTransaction)
+	if err := item.Value(func(val []byte) error {
+		return protobuf.Unmarshal(val, lockedTransaction)
+	}); err != nil {
+		return nil, err
+	}
+	return lockedTransaction.Versions, nil
+}
+
 func (b *BadgerDB) discard(ctx context.Context, keys int) (int, error) {
 	b.RLock()
 	defer b.RUnlock()
+	b.logger.Trace(fmt.Sprintf("attempting to discard %d keys", keys))
 	deleted := 0
 
 	txn := b.db.NewTransaction(true)
@@ -229,7 +276,20 @@ func (b *BadgerDB) discard(ctx context.Context, keys int) (int, error) {
 		return 0, err
 	}
 
+	item, err = txn.Get([]byte(pendingTxnKey))
+	if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
+		return 0, err
+	}
+
+	lockedTransaction, err := getLockedTransaction(item)
+	if err != nil {
+		return 0, err
+	}
+
 	opts := badger.DefaultIteratorOptions
+	opts.PrefetchValues = false
+	// opts.Reverse // may randomly reverse key iteration as optimization
+
 	it := txn.NewIterator(opts)
 	defer it.Close()
 
@@ -237,6 +297,7 @@ STOP:
 	for it.Rewind(); it.Valid(); it.Next() {
 		select {
 		case <-ctx.Done():
+			b.logger.Warn("GC stopped after timeout")
 			break STOP
 		default:
 		}
@@ -245,8 +306,19 @@ STOP:
 		}
 		item := it.Item()
 		key := item.Key()
-		if (index == nil || !bytes.HasPrefix(key, index)) && !bytes.Equal(key, []byte(latestKey)) && !bytes.Equal(key, []byte(versionKey)) {
+
+		if (index == nil || !bytes.HasPrefix(key, index)) &&
+			!bytes.Equal(key, []byte(latestKey)) &&
+			!bytes.Equal(key, []byte(versionKey)) &&
+			!bytes.Equal(key, []byte(pendingTxnKey)) {
+
 			keyCopy := item.KeyCopy(nil)
+			if splits := bytes.Split(keyCopy, []byte("/")); len(splits) > 0 {
+				if _, ok := lockedTransaction[string(splits[0])]; ok {
+					continue
+				}
+			}
+
 			err := txn.Delete(keyCopy)
 			if err != nil {
 				if errors.Is(err, badger.ErrTxnTooBig) {
@@ -289,12 +361,16 @@ func (b *BadgerDB) Close() error {
 }
 
 func NewBadgerDB(config *BadgerConfig, logger hclog.Logger) (*BadgerDB, error) {
-	opts := badger.DefaultOptions(config.Path).
+	path := config.Path
+	if config.InMemory {
+		path = ""
+	}
+	opts := badger.DefaultOptions(path).
 		WithInMemory(config.InMemory).
 		WithLoggingLevel(badger.ERROR).
 		WithNumVersionsToKeep(1).
 		WithNumLevelZeroTables(1).
-		WithValueLogFileSize(500 << 20)
+		WithValueLogFileSize(ValueLogFileSize)
 
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -310,14 +386,15 @@ func NewBadgerDB(config *BadgerConfig, logger hclog.Logger) (*BadgerDB, error) {
 
 	t := time.Now()
 	b := &BadgerDB{
-		db:         db,
-		seq:        seq,
-		gcInterval: gcInterval,
-		logger:     logger,
-		config:     config,
-		entropy:    ulid.Monotonic(rand.New(rand.NewSource(t.Unix())), 0),
-		t:          t,
-		valueSize:  chunkSize,
+		db:               db,
+		gcInterval:       gcInterval,
+		logger:           logger,
+		config:           config,
+		seq:              seq,
+		entropy:          ulid.Monotonic(rand.New(rand.NewSource(t.Unix())), 0),
+		t:                t,
+		valueLogFileSize: ValueLogFileSize,
+		chunkSize:        chunkSize,
 	}
 
 	go func() {
@@ -332,7 +409,7 @@ func NewBadgerDB(config *BadgerConfig, logger hclog.Logger) (*BadgerDB, error) {
 				b.logger.Trace(err.Error())
 				ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 				defer cancel()
-				deleted, err := b.discard(ctx, 10000)
+				deleted, err := b.discard(ctx, 20000)
 				if err != nil {
 					b.logger.Error(err.Error())
 					return

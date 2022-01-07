@@ -35,8 +35,10 @@ func (s *serverCmd) run() cli.ActionFunc {
 			dbGcInterval = storage.MinGcDuration
 		}
 
-		dbLogger := hclog.New(hclog.DefaultOptions).Named("db")
-		dbLogger.SetLevel(hclog.Trace)
+		srvLogger := hclog.New(hclog.DefaultOptions).Named("server")
+		srvLogger.SetLevel(hclog.Trace)
+
+		dbLogger := srvLogger.Named("db")
 		db, err := storage.NewBadgerDB(&storage.BadgerConfig{
 			InMemory:   false,
 			GcInterval: dbGcInterval,
@@ -65,14 +67,7 @@ func (s *serverCmd) run() cli.ActionFunc {
 			}
 		}
 
-		srv, err := server.NewServer(
-			tcpAddr,
-			db,
-			server.WithGrpcMaxRecvSize(cc.Int(grpcMaxReceivedBytes)),
-			server.WithCredentials(cert, key),
-			server.WithCertificateAuthority(ca),
-			server.WithDevMode(cc.Bool(devMode)),
-		)
+		srv, err := server.NewServer(tcpAddr, db, srvLogger, server.WithGrpcMaxRecvSize(cc.Int(grpcMaxReceivedBytes)), server.WithCredentials(cert, key), server.WithCertificateAuthority(ca), server.WithDevMode(cc.Bool(devMode)))
 		if err != nil {
 			return err
 		}

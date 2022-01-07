@@ -3,7 +3,6 @@ module github.com/tigerwill90/webcb
 go 1.16
 
 require (
-	github.com/awnumar/memguard v0.22.2
 	github.com/dgraph-io/badger/v2 v2.2007.4
 	github.com/docker/go-units v0.4.0
 	github.com/gen2brain/beeep v0.0.0-20210529141713-5586760f0cc1
@@ -17,7 +16,6 @@ require (
 )
 
 require (
-	github.com/awnumar/memcall v0.1.2 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.1 // indirect
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
@@ -32,5 +30,5 @@ require (
 	golang.org/x/net v0.0.0-20220105145211-5b0dc2dfae98 // indirect
 	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
 	golang.org/x/text v0.3.7 // indirect
-	google.golang.org/genproto v0.0.0-20211223182754-3ac035c7e7cb // indirect
+	google.golang.org/genproto v0.0.0-20220106181925-4b6d468c965f // indirect
 )
