@@ -22,15 +22,23 @@ import (
 )
 
 type copyCmd struct {
+	ui *ui
 }
 
-func newCopyCommand() *copyCmd {
-	return &copyCmd{}
+func newCopyCommand(ui *ui) *copyCmd {
+	return &copyCmd{
+		ui: ui,
+	}
 }
 
 const defaultClientConnTimeout = 5 * time.Second
 
-func (s *copyCmd) run() cli.ActionFunc {
+type result struct {
+	summary *client.Summary
+	err     error
+}
+
+func (cmd *copyCmd) run() cli.ActionFunc {
 	return func(cc *cli.Context) error {
 		tcpAddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(cc.String(host), strconv.FormatUint(cc.Uint64(port), 10)))
 		if err != nil {
@@ -108,12 +116,12 @@ func (s *copyCmd) run() cli.ActionFunc {
 		defer copyCancel()
 
 		sig := make(chan os.Signal, 2)
-		copyErr := make(chan error)
+		resultStream := make(chan result)
 		signal.Notify(sig, os.Interrupt, os.Kill)
 
 		c := client.New(conn)
 		go func() {
-			copyErr <- c.Copy(
+			summary, err := c.Copy(
 				copyCtx,
 				bufio.NewReader(os.Stdin),
 				copyopt.WithTransferRate(chunkSize),
@@ -122,17 +130,31 @@ func (s *copyCmd) run() cli.ActionFunc {
 				copyopt.WithCompression(cc.Bool(compress)),
 				copyopt.WithPassword(cc.String(password)),
 			)
+			resultStream <- result{summary: summary, err: err}
 		}()
 
 		select {
 		case <-sig:
 			return fmt.Errorf("copy canceled")
-		case cErr := <-copyErr:
-			if cErr != nil {
+		case res := <-resultStream:
+			if res.err != nil {
 				if errors.Is(copyCtx.Err(), context.DeadlineExceeded) {
 					return fmt.Errorf("copy failed: %w", copyCtx.Err())
 				}
-				return fmt.Errorf("copy failed: %w", cErr)
+				return fmt.Errorf("copy failed: %w", res.err)
+			}
+
+			if cc.Bool(verbose) {
+				cmd.ui.Successf("Successfully copied data to web clipboard!\n\n")
+				cmd.ui.Infof("Duration     : %s\n", formatDuration(res.summary.CopyDuration))
+				cmd.ui.Infof("Read         : %s\n", units.HumanSize(float64(res.summary.BytesRead)))
+				cmd.ui.Infof("Sent         : %s\n", units.HumanSize(float64(res.summary.ByteWrite)))
+				if len(res.summary.Checksum) > 0 {
+					cmd.ui.Infof("Digest       : %x\n", res.summary.Checksum)
+				}
+				cmd.ui.Infof("Compressed   : %t\n", res.summary.Compressed)
+				cmd.ui.Infof("Encrypted    : %t\n", res.summary.Encrypted)
+				cmd.ui.Infof("Upload speed : %s/s\n", units.HumanSize(res.summary.TransferRate))
 			}
 		}
 

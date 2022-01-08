@@ -6,8 +6,8 @@ require (
 	github.com/dgraph-io/badger/v2 v2.2007.4
 	github.com/docker/go-units v0.4.0
 	github.com/gen2brain/beeep v0.0.0-20210529141713-5586760f0cc1
-	github.com/golang/protobuf v1.5.2
 	github.com/hashicorp/go-hclog v1.0.0
+	github.com/jwalton/gchalk v1.2.1
 	github.com/klauspost/compress v1.13.6
 	github.com/oklog/ulid/v2 v2.0.2
 	github.com/urfave/cli/v2 v2.3.0
@@ -27,8 +27,8 @@ require (
 	github.com/gopherjs/gopherjs v0.0.0-20220104163920-15ed2e8cf2bd // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3
-	golang.org/x/net v0.0.0-20220105145211-5b0dc2dfae98 // indirect
+	golang.org/x/net v0.0.0-20220107192237-5cfca573fb4d // indirect
 	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
 	golang.org/x/text v0.3.7 // indirect
-	google.golang.org/genproto v0.0.0-20220106181925-4b6d468c965f // indirect
+	google.golang.org/genproto v0.0.0-20220107163113-42d7afdf6368 // indirect
 )

@@ -31,8 +31,8 @@ func (s *serverCmd) run() cli.ActionFunc {
 		}
 
 		dbGcInterval := cc.Duration(gcInterval)
-		if dbGcInterval < storage.MinGcDuration {
-			dbGcInterval = storage.MinGcDuration
+		if dbGcInterval < storage.MinGcInterval {
+			dbGcInterval = storage.MinGcInterval
 		}
 
 		srvLogger := hclog.New(hclog.DefaultOptions).Named("server")

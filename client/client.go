@@ -29,7 +29,18 @@ func New(conn grpc.ClientConnInterface) *Client {
 	}
 }
 
-func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) error {
+type Summary struct {
+	BytesRead    int
+	ByteWrite    int
+	CopyDuration time.Duration
+	Checksum     []byte
+	Encrypted    bool
+	Compressed   bool
+	TransferRate float64
+}
+
+func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) (*Summary, error) {
+	now := time.Now()
 	config := copyopt.DefaultConfig()
 	for _, opt := range opts {
 		opt.Apply(config)
@@ -37,19 +48,20 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 
 	stream, err := c.c.Copy(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	hasher := sha256.New()
 	defer hasher.Reset()
 
 	gw := grpchelper.NewWriter(newGrpcSender(stream), make([]byte, config.ChunkSize))
-	w := io.Writer(gw)
+	cnt := BytesWriteCounter(gw)
+	w := io.Writer(cnt)
 	var enc *zstd.Encoder
 	if config.Compression {
 		enc, err = zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedFastest))
 		if err != nil {
-			return err
+			return nil, err
 		}
 		w = enc
 		defer enc.Close()
@@ -68,24 +80,26 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 
 		key, err := crypto.DeriveKey(config.Password, salt)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		sw, err := crypto.NewStreamWriter(key, iv, w)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		defer sw.Close()
 		w = sw
 	}
 
 	if err := sendInfo(stream, config.Ttl, config.Compression, iv, salt); err != nil {
-		return err
+		return nil, err
 	}
 
+	bytesRead := 0
 	buf := make([]byte, config.ChunkSize)
 	for {
-		n, err := io.ReadAtLeast(r, buf, int(config.ChunkSize))
+		nr, err := io.ReadAtLeast(r, buf, int(config.ChunkSize))
+		bytesRead += nr
 		if err != nil {
 			// The error is EOF only if no bytes were read
 			if errors.Is(err, io.EOF) {
@@ -94,31 +108,31 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 			// If an EOF happens after reading fewer than min bytes,
 			// ReadAtLeast returns ErrUnexpectedEOF
 			if errors.Is(err, io.ErrUnexpectedEOF) {
-				if _, err := w.Write(buf[:n]); err != nil {
-					return err
+				if _, err := w.Write(buf[:nr]); err != nil {
+					return nil, err
 				}
 				if enc != nil {
 					if err := enc.Close(); err != nil {
-						return err
+						return nil, err
 					}
 				}
 				if config.Checksum {
-					if _, err := hasher.Write(buf[:n]); err != nil {
-						return err
+					if _, err := hasher.Write(buf[:nr]); err != nil {
+						return nil, err
 					}
 				}
 				continue
 			}
 
-			return err
+			return nil, err
 		}
 
-		if _, err := w.Write(buf[:n]); err != nil {
-			return err
+		if _, err := w.Write(buf[:nr]); err != nil {
+			return nil, err
 		}
 		if config.Checksum {
-			if _, err := hasher.Write(buf[:n]); err != nil {
-				return err
+			if _, err := hasher.Write(buf[:nr]); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -128,14 +142,24 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 		checksum = hasher.Sum(nil)
 	}
 	if err := gw.Flush(checksum); err != nil {
-		return err
+		return nil, err
 	}
 
 	_, err = stream.CloseAndRecv()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+
+	d := time.Since(now)
+	return &Summary{
+		BytesRead:    bytesRead,
+		ByteWrite:    cnt.Sent(),
+		CopyDuration: d,
+		Checksum:     checksum,
+		Encrypted:    len(config.Password) > 0,
+		Compressed:   config.Compression,
+		TransferRate: float64(cnt.Sent()) / d.Seconds(),
+	}, nil
 }
 
 func (c *Client) Paste(ctx context.Context, w io.Writer, opts ...pasteopt.Option) error {
@@ -275,14 +299,16 @@ func sendInfo(stream proto.WebClipboard_CopyClient, ttl time.Duration, compresse
 }
 
 type grpcSender struct {
-	c proto.WebClipboard_CopyClient
+	c         proto.WebClipboard_CopyClient
+	bytesSent int
 }
 
 func newGrpcSender(client proto.WebClipboard_CopyClient) *grpcSender {
-	return &grpcSender{client}
+	return &grpcSender{c: client}
 }
 
 func (gc *grpcSender) SendChunk(p []byte) error {
+	gc.bytesSent += len(p)
 	return gc.c.Send(&proto.CopyStream{Data: &proto.CopyStream_Chunk{
 		Chunk: p,
 	}})
@@ -327,4 +353,39 @@ func (gc *grpcReceiver) Next() ([]byte, error) {
 
 func (gc *grpcReceiver) Checksum() []byte {
 	return gc.checksum
+}
+
+type Counter struct {
+	w        io.Writer
+	r        io.Reader
+	sent     int
+	received int
+}
+
+func BytesWriteCounter(w io.Writer) *Counter {
+	return &Counter{w: w}
+}
+
+func BytesReadCounter(r io.Reader) *Counter {
+	return &Counter{r: r}
+}
+
+func (cnt *Counter) Read(p []byte) (n int, err error) {
+	n, err = cnt.r.Read(p)
+	cnt.received += n
+	return
+}
+
+func (cnt *Counter) Write(p []byte) (n int, err error) {
+	n, err = cnt.w.Write(p)
+	cnt.sent += n
+	return
+}
+
+func (cnt *Counter) Received() int {
+	return cnt.received
+}
+
+func (cnt *Counter) Sent() int {
+	return cnt.sent
 }

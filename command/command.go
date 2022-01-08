@@ -43,6 +43,9 @@ const (
 )
 
 func Run(args []string) int {
+
+	ui := newUi(os.Stdout, os.Stderr)
+
 	app := &cli.App{
 		Name:        "webcb",
 		Usage:       "the web clipboard",
@@ -150,7 +153,7 @@ func Run(args []string) int {
 						Name: connInsecure,
 					},
 				},
-				Action: newCopyCommand().run(),
+				Action: newCopyCommand(ui).run(),
 			},
 			{
 				Name:    "paste",
