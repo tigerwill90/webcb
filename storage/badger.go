@@ -244,6 +244,7 @@ func (b *BadgerDB) Close() error {
 func NewBadgerDB(config *BadgerConfig, logger hclog.Logger) (*BadgerDB, error) {
 	path := config.Path
 	if config.InMemory {
+		logger.Trace("starting database in memory mode")
 		path = ""
 	}
 	opts := badger.DefaultOptions(path).

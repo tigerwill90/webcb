@@ -105,6 +105,13 @@ func (s *pasteCmd) run() cli.ActionFunc {
 		defer pasteCancel()
 
 		var stdout io.Writer = os.Stdout
+		if path := cc.String(file); path != "" {
+			var err error
+			stdout, err = os.Create(path)
+			if err != nil {
+				return err
+			}
+		}
 		if cc.Bool(discard) {
 			stdout = io.Discard
 		}

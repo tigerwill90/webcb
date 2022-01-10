@@ -40,6 +40,8 @@ const (
 	compress             = "compress"
 	password             = "password"
 	discard              = "discard"
+	file                 = "file"
+	watch                = "watch"
 )
 
 func Run(args []string) int {
@@ -87,7 +89,7 @@ func Run(args []string) int {
 						DefaultText: "0s - no timeout",
 					},
 				},
-				Action: newStatusCommand().run(),
+				Action: newStatusCommand(ui).run(),
 			},
 			{
 				Name:    "serve",
@@ -104,11 +106,10 @@ func Run(args []string) int {
 					},
 					&cli.DurationFlag{
 						Name:  gcInterval,
-						Value: 3 * time.Minute,
+						Value: 1 * time.Minute,
 					},
 					&cli.StringFlag{
-						Name:  dbPath,
-						Value: "db",
+						Name: dbPath,
 					},
 				},
 				Action: newServerCmd().run(),
@@ -122,6 +123,10 @@ func Run(args []string) int {
 						Name:    transferRate,
 						Aliases: []string{"rate"},
 						Value:   "1048576b",
+					},
+					&cli.BoolFlag{
+						Name:    watch,
+						Aliases: []string{"w"},
 					},
 					&cli.DurationFlag{
 						Name:        timeout,
@@ -186,6 +191,10 @@ func Run(args []string) int {
 					},
 					&cli.BoolFlag{
 						Name: connInsecure,
+					},
+					&cli.StringFlag{
+						Name:    file,
+						Aliases: []string{"f"},
 					},
 				},
 				Action: newPasteCommand().run(),

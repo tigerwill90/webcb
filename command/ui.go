@@ -49,5 +49,5 @@ func formatDuration(d time.Duration) string {
 	for scale > d {
 		scale = scale / 10
 	}
-	return fmt.Sprintf("%6s", d.Round(scale/100).String())
+	return fmt.Sprintf("%s", d.Round(scale/100).String())
 }

@@ -44,7 +44,7 @@ func (s *webClipboardService) Status(ctx context.Context, _ *emptypb.Empty) (*pr
 		DbPath:              s.db.Path(),
 		GrpcMaxReceiveBytes: int64(s.config.grpcMaxRecvSize),
 		GcInterval:          int64(s.db.GcInterval()),
-		DevMode:             false,
+		DevMode:             s.config.dev,
 		GrpcMTls:            len(s.config.key) > 0 && len(s.config.cert) > 0,
 	}, nil
 }
@@ -79,17 +79,14 @@ func (s *webClipboardService) Copy(server proto.WebClipboard_CopyServer) error {
 		ttl = DefaultTtl
 	}
 
-	fmt.Printf("iv: %x\nsalt: %x\n", fi.Iv, fi.Salt)
-
 	r := grpc.NewReader(newGrpcReceiver(server))
 	n, err := s.db.WriteBatch(r, ttl, fi.Compressed, fi.Iv, fi.Salt)
 	if err != nil {
 		s.logger.Error(err.Error())
 		return err
 	}
+	fmt.Println(n)
 
-	fmt.Println("bytes written to db:", n)
-	fmt.Printf("hash %x\n", r.Checksum())
 	return server.SendAndClose(&emptypb.Empty{})
 }
 
@@ -97,7 +94,6 @@ func (s *webClipboardService) Paste(option *proto.PasteOption, server proto.WebC
 	if option.TransferRate == 0 {
 		option.TransferRate = DefaultTransferRate
 	}
-	fmt.Println("chunk size", option.TransferRate)
 
 	sender := newGrpcSender(server)
 
@@ -106,7 +102,7 @@ func (s *webClipboardService) Paste(option *proto.PasteOption, server proto.WebC
 	}
 
 	w := grpc.NewWriter(sender, make([]byte, option.TransferRate))
-	nr, err := s.db.ReadBatch(w, sender)
+	_, err := s.db.ReadBatch(w, sender)
 	if err != nil {
 		if errors.Is(err, storage.ErrKeyNotFound) {
 			return sender.SendError(fmt.Errorf("no data to paste: %w", err), KeyNotFound)
@@ -115,7 +111,6 @@ func (s *webClipboardService) Paste(option *proto.PasteOption, server proto.WebC
 		return err
 	}
 
-	fmt.Println("bytes read from db:", nr)
 	return nil
 }
 

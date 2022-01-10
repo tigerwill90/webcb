@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/hashicorp/go-hclog"
 	"github.com/tigerwill90/webcb/server"
@@ -11,6 +12,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -38,9 +40,26 @@ func (s *serverCmd) run() cli.ActionFunc {
 		srvLogger := hclog.New(hclog.DefaultOptions).Named("server")
 		srvLogger.SetLevel(hclog.Trace)
 
+		var inMemory bool
+		if cc.Bool(devMode) && cc.String(dbPath) == "" {
+			inMemory = true
+		}
+
+		if !cc.Bool(devMode) && cc.String(dbPath) == "" {
+			return errors.New("a path is required to persist clipboard data when dev mode is disable")
+		}
+
+		path := cc.String(filepath.Clean(dbPath))
+
+		if cc.String(path) != "" {
+			if err := os.MkdirAll(path, 0700); err != nil {
+				return err
+			}
+		}
+
 		dbLogger := srvLogger.Named("db")
 		db, err := storage.NewBadgerDB(&storage.BadgerConfig{
-			InMemory:   false,
+			InMemory:   inMemory,
 			GcInterval: dbGcInterval,
 			Path:       cc.String(dbPath),
 		}, dbLogger)

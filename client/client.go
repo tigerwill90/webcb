@@ -6,12 +6,15 @@ import (
 	"crypto/aes"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"github.com/klauspost/compress/zstd"
+	"github.com/minio/sio"
 	"github.com/tigerwill90/webcb/client/copyopt"
 	"github.com/tigerwill90/webcb/client/pasteopt"
 	"github.com/tigerwill90/webcb/internal/crypto"
 	grpchelper "github.com/tigerwill90/webcb/internal/grpc"
 	"github.com/tigerwill90/webcb/proto"
+	"golang.org/x/crypto/hkdf"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"io"
@@ -58,6 +61,7 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 	cnt := BytesWriteCounter(gw)
 	w := io.Writer(cnt)
 	var enc *zstd.Encoder
+	var tw io.WriteCloser
 	if config.Compression {
 		enc, err = zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedFastest))
 		if err != nil {
@@ -83,12 +87,34 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 			return nil, err
 		}
 
-		sw, err := crypto.NewStreamWriter(key, iv, w)
+		fmt.Printf("%x\n", key)
+
+		// derive an encryption key from the master key and the nonce
+		var newKey [32]byte
+		kdf := hkdf.New(sha256.New, key, randSalt, nil)
+		if _, err = io.ReadFull(kdf, newKey[:]); err != nil {
+			return nil, err
+		}
+
+		tw, err = sio.EncryptWriter(w, sio.Config{
+			CipherSuites: []byte{sio.AES_256_GCM, sio.CHACHA20_POLY1305},
+			Key:          newKey[:],
+		})
 		if err != nil {
 			return nil, err
 		}
-		defer sw.Close()
-		w = sw
+		defer func() {
+			if err := tw.Close(); err != nil {
+				fmt.Println(err)
+			}
+		}()
+
+		/*		sw, err := crypto.NewStreamWriter(key, iv, w)
+				if err != nil {
+					return nil, err
+				}
+				defer sw.Close()*/
+		w = tw
 	}
 
 	if err := sendInfo(stream, config.Ttl, config.Compression, iv, salt); err != nil {
@@ -103,6 +129,7 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 		if err != nil {
 			// The error is EOF only if no bytes were read
 			if errors.Is(err, io.EOF) {
+				tw.Close()
 				break
 			}
 			// If an EOF happens after reading fewer than min bytes,
@@ -116,6 +143,8 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 						return nil, err
 					}
 				}
+				tw.Close()
+
 				if config.Checksum {
 					if _, err := hasher.Write(buf[:nr]); err != nil {
 						return nil, err
@@ -216,10 +245,27 @@ func (c *Client) Paste(ctx context.Context, w io.Writer, opts ...pasteopt.Option
 			return err
 		}
 
-		sr, err := crypto.NewStreamReader(key, info.Iv, r)
+		fmt.Printf("%x\n", key)
+
+		// derive an encryption key from the master key and the nonce
+		var newKey [32]byte
+		kdf := hkdf.New(sha256.New, key, info.Salt, nil)
+		if _, err = io.ReadFull(kdf, newKey[:]); err != nil {
+			return err
+		}
+
+		sr, err := sio.EncryptReader(r, sio.Config{
+			CipherSuites: []byte{sio.AES_256_GCM, sio.CHACHA20_POLY1305},
+			Key:          newKey[:],
+		})
 		if err != nil {
 			return err
 		}
+
+		/*		sr, err := crypto.NewStreamReader(key, info.Iv, r)
+				if err != nil {
+					return err
+				}*/
 		r = sr
 	}
 
@@ -274,7 +320,12 @@ func (c *Client) Clean(ctx context.Context) error {
 }
 
 type ServerConfig struct {
-	DbSize int64
+	DbSize              float64
+	DbPath              string
+	GrpcMaxReceiveBytes float64
+	GcInterval          time.Duration
+	DevMOde             bool
+	GrpcMTLS            bool
 }
 
 func (c *Client) Status(ctx context.Context) (*ServerConfig, error) {
@@ -283,7 +334,12 @@ func (c *Client) Status(ctx context.Context) (*ServerConfig, error) {
 		return nil, err
 	}
 	return &ServerConfig{
-		DbSize: config.DbSize,
+		DbSize:              float64(config.DbSize),
+		DbPath:              config.DbPath,
+		GrpcMaxReceiveBytes: float64(config.GrpcMaxReceiveBytes),
+		GcInterval:          time.Duration(config.GcInterval),
+		DevMOde:             config.DevMode,
+		GrpcMTLS:            config.GrpcMTls,
 	}, nil
 }
 

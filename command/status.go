@@ -17,10 +17,14 @@ import (
 	"strconv"
 )
 
-type statusCmd struct{}
+type statusCmd struct {
+	ui *ui
+}
 
-func newStatusCommand() *statusCmd {
-	return &statusCmd{}
+func newStatusCommand(ui *ui) *statusCmd {
+	return &statusCmd{
+		ui: ui,
+	}
 }
 
 func (s *statusCmd) run() cli.ActionFunc {
@@ -92,7 +96,14 @@ func (s *statusCmd) run() cli.ActionFunc {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("db size: %s\n", units.HumanSize(float64(serverStatus.DbSize)))
+
+		s.ui.Infof("Webcb server status\n")
+		s.ui.Infof("DB Size           : %s\n", units.HumanSize(serverStatus.DbSize))
+		s.ui.Infof("DB Path           : %s\n", serverStatus.DbPath)
+		s.ui.Infof("Max accepted rate : %s\n", units.HumanSize(serverStatus.GrpcMaxReceiveBytes))
+		s.ui.Infof("GC Interval       : %s\n", formatDuration(serverStatus.GcInterval))
+		s.ui.Infof("Dev mode enable   : %t\n", serverStatus.DevMOde)
+		s.ui.Infof("MTLS enable       : %t\n", serverStatus.GrpcMTLS)
 		return nil
 	}
 }
