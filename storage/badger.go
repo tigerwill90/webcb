@@ -65,7 +65,7 @@ type StreamWriter interface {
 }
 
 type HeaderWriter interface {
-	Write(compressed, hasChecksum bool, masterKeyNonce, keyNonce []byte) error
+	Write(compressed, hasChecksum bool, masterKeyNonce, keyNonce, iv []byte) error
 }
 
 func (b *BadgerDB) ReadBatch(sw StreamWriter, hw HeaderWriter) (int, error) {
@@ -92,7 +92,7 @@ func (b *BadgerDB) ReadBatch(sw StreamWriter, hw HeaderWriter) (int, error) {
 			return err
 		}
 
-		if err := hw.Write(cb.Compressed, len(cb.Checksum) > 0, cb.MasterKeyNonce, cb.KeyNonce); err != nil {
+		if err := hw.Write(cb.Compressed, len(cb.Checksum) > 0, cb.MasterKeyNonce, cb.KeyNonce, cb.Iv); err != nil {
 			return err
 		}
 
@@ -131,7 +131,7 @@ type StreamReader interface {
 	Checksum() []byte
 }
 
-func (b *BadgerDB) WriteBatch(r StreamReader, ttl time.Duration, compressed bool, masterKeyNonce []byte, keyNonce []byte) (int, error) {
+func (b *BadgerDB) WriteBatch(r StreamReader, ttl time.Duration, compressed bool, masterKeyNonce []byte, keyNonce []byte, iv []byte) (int, error) {
 	b.RLock()
 	defer b.RUnlock()
 	b.logger.Trace("receiving clipboard stream from client")
@@ -185,6 +185,7 @@ func (b *BadgerDB) WriteBatch(r StreamReader, ttl time.Duration, compressed bool
 		Compressed:     compressed,
 		MasterKeyNonce: masterKeyNonce,
 		KeyNonce:       keyNonce,
+		Iv:             iv,
 		Checksum:       r.Checksum(),
 		Size:           int64(written),
 	}

@@ -6,7 +6,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"github.com/klauspost/compress/zstd"
-	"github.com/minio/sio"
+	"github.com/secure-io/sio-go"
 	"github.com/tigerwill90/webcb/client/copyopt"
 	"github.com/tigerwill90/webcb/client/pasteopt"
 	"github.com/tigerwill90/webcb/internal/crypto"
@@ -62,6 +62,7 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 
 	var masterKeyNonce []byte
 	var keyNonce []byte
+	var iv []byte
 	if len(config.Password) > 0 {
 		masterKeyNonce = make([]byte, crypto.NonceSize)
 		rand.Read(masterKeyNonce)
@@ -79,12 +80,15 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 			return nil, err
 		}
 
-		tw, err = sio.EncryptWriter(w, sio.Config{
-			Key: key,
-		})
+		s, err := sio.AES_256_GCM.Stream(key)
 		if err != nil {
 			return nil, err
 		}
+
+		iv = make([]byte, s.NonceSize())
+		rand.Read(iv)
+
+		tw = s.EncryptWriter(w, iv, nil)
 		w = tw
 	}
 
@@ -96,7 +100,7 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 		w = enc
 	}
 
-	if err := sendInfo(stream, config.Ttl, config.Compression, masterKeyNonce, keyNonce); err != nil {
+	if err := sendInfo(stream, config.Ttl, config.Compression, masterKeyNonce, keyNonce, iv); err != nil {
 		return nil, err
 	}
 
@@ -118,6 +122,7 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 						return nil, err
 					}
 				}
+
 				break
 			}
 			// If an EOF happens after reading fewer than min bytes,
@@ -125,16 +130,6 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 			if errors.Is(err, io.ErrUnexpectedEOF) {
 				if _, err := w.Write(buf[:nr]); err != nil {
 					return nil, err
-				}
-				if enc != nil {
-					if err := enc.Close(); err != nil {
-						return nil, err
-					}
-				}
-				if tw != nil {
-					if err := tw.Close(); err != nil {
-						return nil, err
-					}
 				}
 
 				if config.Checksum {
@@ -234,14 +229,12 @@ func (c *Client) Paste(ctx context.Context, w io.Writer, opts ...pasteopt.Option
 			return err
 		}
 
-		sr, err := sio.DecryptReader(r, sio.Config{
-			Key: key,
-		})
+		s, err := sio.AES_256_GCM.Stream(key)
 		if err != nil {
 			return err
 		}
 
-		r = sr
+		r = s.DecryptReader(r, info.Iv, nil)
 	}
 
 	if info.Compressed {
@@ -327,13 +320,14 @@ func (c *Client) Status(ctx context.Context) (*ServerConfig, error) {
 	}, nil
 }
 
-func sendInfo(stream proto.WebClipboard_CopyClient, ttl time.Duration, compressed bool, masterKeyNonce []byte, keyNonce []byte) error {
+func sendInfo(stream proto.WebClipboard_CopyClient, ttl time.Duration, compressed bool, masterKeyNonce []byte, keyNonce []byte, iv []byte) error {
 	return stream.Send(&proto.CopyStream{Data: &proto.CopyStream_Info_{
 		Info: &proto.CopyStream_Info{
 			Ttl:            int64(ttl),
 			Compressed:     compressed,
 			MasterKeyNonce: masterKeyNonce,
 			KeyNonce:       keyNonce,
+			Iv:             iv,
 		},
 	}})
 }

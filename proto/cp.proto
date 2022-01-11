@@ -21,8 +21,9 @@ message Clipboard {
   bool compressed = 3;
   bytes master_key_nonce = 4;
   bytes key_nonce = 5;
-  bytes checksum = 6;
-  int64 size = 7;
+  bytes iv = 6;
+  bytes checksum = 7;
+  int64 size = 8;
 }
 
 message LockedTransaction {
@@ -39,6 +40,7 @@ message PastStream {
     bool compressed = 2;
     bytes master_key_nonce = 3;
     bytes key_nonce = 4;
+    bytes iv = 5;
   }
 
   message Error {
@@ -64,6 +66,7 @@ message CopyStream {
     bool compressed = 2;
     bytes master_key_nonce = 3;
     bytes key_nonce = 4;
+    bytes iv = 5;
   }
 
   oneof data {

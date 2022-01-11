@@ -80,7 +80,7 @@ func (s *webClipboardService) Copy(server proto.WebClipboard_CopyServer) error {
 	}
 
 	r := grpc.NewReader(newGrpcReceiver(server))
-	_, err = s.db.WriteBatch(r, ttl, fi.Compressed, fi.MasterKeyNonce, fi.KeyNonce)
+	_, err = s.db.WriteBatch(r, ttl, fi.Compressed, fi.MasterKeyNonce, fi.KeyNonce, fi.Iv)
 	if err != nil {
 		s.logger.Error(err.Error())
 		return err
@@ -130,13 +130,14 @@ func (gp *grpcSender) SendError(err error, kind ErrorType) error {
 	}})
 }
 
-func (gp *grpcSender) Write(compressed, hasChecksum bool, masterKeyNonce, keyNonce []byte) error {
+func (gp *grpcSender) Write(compressed, hasChecksum bool, masterKeyNonce, keyNonce, iv []byte) error {
 	return gp.srv.Send(&proto.PastStream{Data: &proto.PastStream_Info_{
 		Info: &proto.PastStream_Info{
 			Checksum:       hasChecksum,
 			Compressed:     compressed,
 			MasterKeyNonce: masterKeyNonce,
 			KeyNonce:       keyNonce,
+			Iv:             iv,
 		},
 	}})
 }
