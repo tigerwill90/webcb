@@ -19,8 +19,8 @@ message Clipboard {
   uint64 sequence = 1;
   string expire_at = 2;
   bool compressed = 3;
-  bytes salt = 4;
-  bytes iv = 5;
+  bytes master_key_nonce = 4;
+  bytes key_nonce = 5;
   bytes checksum = 6;
   int64 size = 7;
 }
@@ -37,8 +37,8 @@ message PastStream {
   message Info {
     bool checksum = 1;
     bool compressed = 2;
-    bytes salt = 3;
-    bytes iv = 4;
+    bytes master_key_nonce = 3;
+    bytes key_nonce = 4;
   }
 
   message Error {
@@ -62,8 +62,8 @@ message CopyStream {
   message Info {
     int64 ttl = 1;
     bool compressed = 2;
-    bytes salt = 3;
-    bytes iv = 4;
+    bytes master_key_nonce = 3;
+    bytes key_nonce = 4;
   }
 
   oneof data {

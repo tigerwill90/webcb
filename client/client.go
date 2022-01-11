@@ -3,10 +3,8 @@ package client
 import (
 	"bytes"
 	"context"
-	"crypto/aes"
 	"crypto/sha256"
 	"errors"
-	"fmt"
 	"github.com/klauspost/compress/zstd"
 	"github.com/minio/sio"
 	"github.com/tigerwill90/webcb/client/copyopt"
@@ -14,7 +12,6 @@ import (
 	"github.com/tigerwill90/webcb/internal/crypto"
 	grpchelper "github.com/tigerwill90/webcb/internal/grpc"
 	"github.com/tigerwill90/webcb/proto"
-	"golang.org/x/crypto/hkdf"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"io"
@@ -62,62 +59,44 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 	w := io.Writer(cnt)
 	var enc *zstd.Encoder
 	var tw io.WriteCloser
+
+	var masterKeyNonce []byte
+	var keyNonce []byte
+	if len(config.Password) > 0 {
+		masterKeyNonce = make([]byte, crypto.NonceSize)
+		rand.Read(masterKeyNonce)
+
+		masterKey, err := crypto.DerivePassword(config.Password, masterKeyNonce)
+		if err != nil {
+			return nil, err
+		}
+
+		keyNonce = make([]byte, crypto.NonceSize)
+		rand.Read(keyNonce)
+
+		key, err := crypto.DeriveMasterKey(masterKey, keyNonce)
+		if err != nil {
+			return nil, err
+		}
+
+		tw, err = sio.EncryptWriter(w, sio.Config{
+			Key: key,
+		})
+		if err != nil {
+			return nil, err
+		}
+		w = tw
+	}
+
 	if config.Compression {
 		enc, err = zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedFastest))
 		if err != nil {
 			return nil, err
 		}
 		w = enc
-		defer enc.Close()
 	}
 
-	var salt []byte
-	var iv []byte
-	if len(config.Password) > 0 {
-		randSalt := make([]byte, crypto.SaltSize)
-		rand.Read(randSalt)
-		randIv := make([]byte, aes.BlockSize)
-		rand.Read(randIv)
-
-		salt = randSalt
-		iv = randIv
-
-		key, err := crypto.DeriveKey(config.Password, salt)
-		if err != nil {
-			return nil, err
-		}
-
-		fmt.Printf("%x\n", key)
-
-		// derive an encryption key from the master key and the nonce
-		var newKey [32]byte
-		kdf := hkdf.New(sha256.New, key, randSalt, nil)
-		if _, err = io.ReadFull(kdf, newKey[:]); err != nil {
-			return nil, err
-		}
-
-		tw, err = sio.EncryptWriter(w, sio.Config{
-			CipherSuites: []byte{sio.AES_256_GCM, sio.CHACHA20_POLY1305},
-			Key:          newKey[:],
-		})
-		if err != nil {
-			return nil, err
-		}
-		defer func() {
-			if err := tw.Close(); err != nil {
-				fmt.Println(err)
-			}
-		}()
-
-		/*		sw, err := crypto.NewStreamWriter(key, iv, w)
-				if err != nil {
-					return nil, err
-				}
-				defer sw.Close()*/
-		w = tw
-	}
-
-	if err := sendInfo(stream, config.Ttl, config.Compression, iv, salt); err != nil {
+	if err := sendInfo(stream, config.Ttl, config.Compression, masterKeyNonce, keyNonce); err != nil {
 		return nil, err
 	}
 
@@ -129,7 +108,16 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 		if err != nil {
 			// The error is EOF only if no bytes were read
 			if errors.Is(err, io.EOF) {
-				tw.Close()
+				if enc != nil {
+					if err := enc.Close(); err != nil {
+						return nil, err
+					}
+				}
+				if tw != nil {
+					if err := tw.Close(); err != nil {
+						return nil, err
+					}
+				}
 				break
 			}
 			// If an EOF happens after reading fewer than min bytes,
@@ -143,7 +131,11 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 						return nil, err
 					}
 				}
-				tw.Close()
+				if tw != nil {
+					if err := tw.Close(); err != nil {
+						return nil, err
+					}
+				}
 
 				if config.Checksum {
 					if _, err := hasher.Write(buf[:nr]); err != nil {
@@ -225,12 +217,33 @@ func (c *Client) Paste(ctx context.Context, w io.Writer, opts ...pasteopt.Option
 		return errors.New(pasteErr.Message)
 	}
 
-	if len(config.Password) == 0 && (len(info.Iv) != 0 || len(info.Salt) != 0) {
+	if len(config.Password) == 0 && (len(info.MasterKeyNonce) != 0 || len(info.KeyNonce) != 0) {
 		return errors.New("data is encrypted but no password provided")
 	}
 
 	gr := grpchelper.NewReader(newGrpcReceiver(resp))
 	r := io.Reader(gr)
+	if len(config.Password) > 0 && len(info.MasterKeyNonce) == crypto.NonceSize && len(info.KeyNonce) == crypto.NonceSize {
+		masterKey, err := crypto.DerivePassword(config.Password, info.MasterKeyNonce)
+		if err != nil {
+			return err
+		}
+
+		key, err := crypto.DeriveMasterKey(masterKey, info.KeyNonce)
+		if err != nil {
+			return err
+		}
+
+		sr, err := sio.DecryptReader(r, sio.Config{
+			Key: key,
+		})
+		if err != nil {
+			return err
+		}
+
+		r = sr
+	}
+
 	if info.Compressed {
 		dec, err := zstd.NewReader(r)
 		if err != nil {
@@ -239,41 +252,12 @@ func (c *Client) Paste(ctx context.Context, w io.Writer, opts ...pasteopt.Option
 		defer dec.Close()
 		r = dec
 	}
-	if len(config.Password) > 0 && len(info.Iv) == aes.BlockSize && len(info.Salt) == crypto.SaltSize {
-		key, err := crypto.DeriveKey(config.Password, info.Salt)
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("%x\n", key)
-
-		// derive an encryption key from the master key and the nonce
-		var newKey [32]byte
-		kdf := hkdf.New(sha256.New, key, info.Salt, nil)
-		if _, err = io.ReadFull(kdf, newKey[:]); err != nil {
-			return err
-		}
-
-		sr, err := sio.EncryptReader(r, sio.Config{
-			CipherSuites: []byte{sio.AES_256_GCM, sio.CHACHA20_POLY1305},
-			Key:          newKey[:],
-		})
-		if err != nil {
-			return err
-		}
-
-		/*		sr, err := crypto.NewStreamReader(key, info.Iv, r)
-				if err != nil {
-					return err
-				}*/
-		r = sr
-	}
 
 	buf := make([]byte, config.ChunkSize)
 	for {
 		n, err := r.Read(buf)
 		if err != nil {
-			if !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+			if !errors.Is(err, io.EOF) {
 				return err
 			}
 
@@ -343,13 +327,13 @@ func (c *Client) Status(ctx context.Context) (*ServerConfig, error) {
 	}, nil
 }
 
-func sendInfo(stream proto.WebClipboard_CopyClient, ttl time.Duration, compressed bool, iv []byte, salt []byte) error {
+func sendInfo(stream proto.WebClipboard_CopyClient, ttl time.Duration, compressed bool, masterKeyNonce []byte, keyNonce []byte) error {
 	return stream.Send(&proto.CopyStream{Data: &proto.CopyStream_Info_{
 		Info: &proto.CopyStream_Info{
-			Ttl:        int64(ttl),
-			Compressed: compressed,
-			Salt:       salt,
-			Iv:         iv,
+			Ttl:            int64(ttl),
+			Compressed:     compressed,
+			MasterKeyNonce: masterKeyNonce,
+			KeyNonce:       keyNonce,
 		},
 	}})
 }
