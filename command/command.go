@@ -4,6 +4,7 @@ import (
 	crypto "crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"github.com/mattn/go-tty"
 	"github.com/tigerwill90/webcb/server"
 	"github.com/urfave/cli/v2"
 	"math/rand"
@@ -42,12 +43,18 @@ const (
 	fileFlag                 = "file"
 	watchFlag                = "watch"
 	noPasswordFlag           = "no-password"
+	clipboardFlag            = "clipboard"
 )
 
 const (
-	passwordEnv = "WEBCB_PASSWORD"
-	hostEnv     = "WEBCB_HOST"
-	portEnv     = "WEBCB_PORT"
+	secretEnv = "WEBCB_SECRET"
+	hostEnv   = "WEBCB_HOST"
+	portEnv   = "WEBCB_PORT"
+)
+
+const (
+	defaultServerAddr = "0.0.0.0"
+	defaultClientAddr = "127.0.0.1"
 )
 
 func Run(args []string) int {
@@ -199,6 +206,10 @@ func Run(args []string) int {
 						Name:    fileFlag,
 						Aliases: []string{"f"},
 					},
+					&cli.BoolFlag{
+						Name:    clipboardFlag,
+						Aliases: []string{"cb"},
+					},
 				},
 				Action: newPasteCommand().run(),
 			},
@@ -225,4 +236,26 @@ func Run(args []string) int {
 	}
 
 	return 0
+}
+
+func readSecret() ([]byte, error) {
+	pwd := os.Getenv(secretEnv)
+	if pwd != "" {
+		return []byte(pwd), nil
+	}
+
+	tty, err := tty.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer tty.Close()
+
+	if _, err := fmt.Fprint(tty.Output(), "Password: "); err != nil {
+		return nil, err
+	}
+	pwd, err = tty.ReadPasswordNoEcho()
+	if err != nil {
+		return nil, err
+	}
+	return []byte(pwd), nil
 }

@@ -8,7 +8,6 @@ type Option interface {
 
 type Config struct {
 	ChunkSize int64
-	Password  []byte
 }
 
 func DefaultConfig() *Config {
@@ -34,11 +33,5 @@ func WithTransferRate(n int64) *implPasteOption {
 		if n > 0 {
 			c.ChunkSize = n
 		}
-	})
-}
-
-func WithPassword(password string) *implPasteOption {
-	return newImplPasteOption(func(c *Config) {
-		c.Password = []byte(password)
 	})
 }

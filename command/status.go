@@ -31,7 +31,7 @@ func (s *statusCmd) run() cli.ActionFunc {
 	return func(cc *cli.Context) error {
 		host := cc.String(hostFlag)
 		if host == "" {
-			host = "127.0.0.1"
+			host = defaultClientAddr
 		}
 
 		address := net.JoinHostPort(host, strconv.FormatUint(cc.Uint64(portFlag), 10))

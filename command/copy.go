@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/docker/go-units"
-	"github.com/mattn/go-tty"
 	"github.com/tigerwill90/webcb/client"
 	"github.com/tigerwill90/webcb/client/copyopt"
 	grpctls "github.com/tigerwill90/webcb/internal/tls"
@@ -44,29 +43,10 @@ func (cmd *copyCmd) run() cli.ActionFunc {
 	return func(cc *cli.Context) error {
 		host := cc.String(hostFlag)
 		if host == "" {
-			host = "127.0.0.1"
+			host = defaultClientAddr
 		}
 
 		address := net.JoinHostPort(host, strconv.FormatUint(cc.Uint64(portFlag), 10))
-
-		var pwd string
-		if !cc.Bool(noPasswordFlag) {
-			pwd = os.Getenv(passwordEnv)
-			if pwd == "" {
-				tty, err := tty.Open()
-				if err != nil {
-					return err
-				}
-
-				fmt.Print("Password: ")
-				pwd, err = tty.ReadPasswordNoEcho()
-				if err != nil {
-					tty.Close()
-					return err
-				}
-				tty.Close()
-			}
-		}
 
 		chunkSize, err := units.FromHumanSize(cc.String(transferRateFlag))
 		if err != nil {
@@ -156,11 +136,12 @@ func (cmd *copyCmd) run() cli.ActionFunc {
 			summary, err := c.Copy(
 				copyCtx,
 				bufio.NewReader(os.Stdin),
+				client.Password(readSecret),
 				copyopt.WithTransferRate(chunkSize),
 				copyopt.WithChecksum(cc.Bool(checksumFlag)),
 				copyopt.WithTtl(cc.Duration(ttlFlag)),
 				copyopt.WithCompression(cc.Bool(compressFlag)),
-				copyopt.WithPassword(pwd),
+				copyopt.WithEncryption(!cc.Bool(noPasswordFlag)),
 			)
 			resultStream <- result{summary: summary, err: err}
 		}()

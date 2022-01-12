@@ -14,7 +14,7 @@ type Config struct {
 	Checksum    bool
 	Ttl         time.Duration
 	Compression bool
-	Password    []byte
+	Encryption  bool
 }
 
 func DefaultConfig() *Config {
@@ -64,8 +64,8 @@ func WithCompression(enable bool) *implCopyOption {
 	})
 }
 
-func WithPassword(password string) *implCopyOption {
+func WithEncryption(enable bool) *implCopyOption {
 	return newImplCopyOption(func(c *Config) {
-		c.Password = []byte(password)
+		c.Encryption = enable
 	})
 }

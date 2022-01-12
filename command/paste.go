@@ -31,7 +31,7 @@ func (s *pasteCmd) run() cli.ActionFunc {
 	return func(cc *cli.Context) error {
 		host := cc.String(hostFlag)
 		if host == "" {
-			host = "127.0.0.1"
+			host = defaultClientAddr
 		}
 
 		address := net.JoinHostPort(host, strconv.FormatUint(cc.Uint64(portFlag), 10))
@@ -124,12 +124,7 @@ func (s *pasteCmd) run() cli.ActionFunc {
 		pastErr := make(chan error)
 		signal.Notify(sig, os.Interrupt, os.Kill)
 		go func() {
-			pastErr <- c.Paste(
-				pasteCtx,
-				stdout,
-				// pasteopt.WithPassword(pwd),
-				pasteopt.WithTransferRate(chunkSize),
-			)
+			pastErr <- c.Paste(pasteCtx, stdout, client.Password(readSecret), pasteopt.WithTransferRate(chunkSize))
 		}()
 
 		select {

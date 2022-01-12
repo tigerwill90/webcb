@@ -29,7 +29,7 @@ func (s *serverCmd) run() cli.ActionFunc {
 	return func(cc *cli.Context) error {
 		host := cc.String(hostFlag)
 		if host == "" {
-			host = "0.0.0.0"
+			host = defaultServerAddr
 		}
 
 		tcpAddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(host, strconv.FormatUint(cc.Uint64(portFlag), 10)))
@@ -42,7 +42,9 @@ func (s *serverCmd) run() cli.ActionFunc {
 			dbGcInterval = storage.MinGcInterval
 		}
 
-		srvLogger := hclog.New(hclog.DefaultOptions).Named("server")
+		logOpts := hclog.DefaultOptions
+		logOpts.Color = hclog.AutoColor
+		srvLogger := hclog.New(logOpts).Named("server")
 		srvLogger.SetLevel(hclog.Trace)
 
 		var inMemory bool

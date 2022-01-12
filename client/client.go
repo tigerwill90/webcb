@@ -14,6 +14,7 @@ import (
 	"github.com/tigerwill90/webcb/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"hash"
 	"io"
 	"math/rand"
 	"time"
@@ -39,7 +40,7 @@ type Summary struct {
 	TransferRate float64
 }
 
-func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) (*Summary, error) {
+func (c *Client) Copy(ctx context.Context, r io.Reader, secret SecretManager, opts ...copyopt.Option) (*Summary, error) {
 	now := time.Now()
 	config := copyopt.DefaultConfig()
 	for _, opt := range opts {
@@ -51,23 +52,34 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 		return nil, err
 	}
 
-	hasher := sha256.New()
-	defer hasher.Reset()
-
 	gw := grpchelper.NewWriter(newGrpcSender(stream), make([]byte, config.ChunkSize))
 	cnt := BytesWriteCounter(gw)
 	w := io.Writer(cnt)
-	var enc *zstd.Encoder
-	var tw io.WriteCloser
 
-	var masterKeyNonce []byte
-	var keyNonce []byte
-	var iv []byte
-	if len(config.Password) > 0 {
+	var (
+		hasher         hash.Hash
+		encoder        *zstd.Encoder
+		encrypter      io.WriteCloser
+		masterKeyNonce []byte
+		keyNonce       []byte
+		iv             []byte
+	)
+
+	if config.Checksum {
+		hasher = sha256.New()
+		defer hasher.Reset()
+	}
+
+	if config.Encryption {
+		pwd, err := secret.Read()
+		if err != nil {
+			return nil, err
+		}
+
 		masterKeyNonce = make([]byte, crypto.NonceSize)
 		rand.Read(masterKeyNonce)
 
-		masterKey, err := crypto.DerivePassword(config.Password, masterKeyNonce)
+		masterKey, err := crypto.DerivePassword(pwd, masterKeyNonce)
 		if err != nil {
 			return nil, err
 		}
@@ -88,16 +100,16 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 		iv = make([]byte, s.NonceSize())
 		rand.Read(iv)
 
-		tw = s.EncryptWriter(w, iv, nil)
-		w = tw
+		encrypter = s.EncryptWriter(w, iv, nil)
+		w = encrypter
 	}
 
 	if config.Compression {
-		enc, err = zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedFastest))
+		encoder, err = zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedFastest))
 		if err != nil {
 			return nil, err
 		}
-		w = enc
+		w = encoder
 	}
 
 	if err := sendInfo(stream, config.Ttl, config.Compression, masterKeyNonce, keyNonce, iv); err != nil {
@@ -112,13 +124,13 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 		if err != nil {
 			// The error is EOF only if no bytes were read
 			if errors.Is(err, io.EOF) {
-				if enc != nil {
-					if err := enc.Close(); err != nil {
+				if encoder != nil {
+					if err := encoder.Close(); err != nil {
 						return nil, err
 					}
 				}
-				if tw != nil {
-					if err := tw.Close(); err != nil {
+				if encrypter != nil {
+					if err := encrypter.Close(); err != nil {
 						return nil, err
 					}
 				}
@@ -132,7 +144,7 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 					return nil, err
 				}
 
-				if config.Checksum {
+				if hasher != nil {
 					if _, err := hasher.Write(buf[:nr]); err != nil {
 						return nil, err
 					}
@@ -146,7 +158,7 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 		if _, err := w.Write(buf[:nr]); err != nil {
 			return nil, err
 		}
-		if config.Checksum {
+		if hasher != nil {
 			if _, err := hasher.Write(buf[:nr]); err != nil {
 				return nil, err
 			}
@@ -154,15 +166,14 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 	}
 
 	var checksum []byte
-	if config.Checksum {
+	if hasher != nil {
 		checksum = hasher.Sum(nil)
 	}
 	if err := gw.Flush(checksum); err != nil {
 		return nil, err
 	}
 
-	_, err = stream.CloseAndRecv()
-	if err != nil {
+	if _, err = stream.CloseAndRecv(); err != nil {
 		return nil, err
 	}
 
@@ -172,13 +183,13 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, opts ...copyopt.Option) 
 		ByteWrite:    cnt.Sent(),
 		CopyDuration: d,
 		Checksum:     checksum,
-		Encrypted:    len(config.Password) > 0,
+		Encrypted:    config.Encryption,
 		Compressed:   config.Compression,
 		TransferRate: float64(cnt.Sent()) / d.Seconds(),
 	}, nil
 }
 
-func (c *Client) Paste(ctx context.Context, w io.Writer, opts ...pasteopt.Option) error {
+func (c *Client) Paste(ctx context.Context, w io.Writer, secret SecretManager, opts ...pasteopt.Option) error {
 	config := pasteopt.DefaultConfig()
 	for _, opt := range opts {
 		opt.Apply(config)
@@ -188,9 +199,6 @@ func (c *Client) Paste(ctx context.Context, w io.Writer, opts ...pasteopt.Option
 	if err != nil {
 		return err
 	}
-
-	hasher := sha256.New()
-	defer hasher.Reset()
 
 	stream, err := resp.Recv()
 	if err != nil {
@@ -212,14 +220,17 @@ func (c *Client) Paste(ctx context.Context, w io.Writer, opts ...pasteopt.Option
 		return errors.New(pasteErr.Message)
 	}
 
-	if len(config.Password) == 0 && (len(info.MasterKeyNonce) != 0 || len(info.KeyNonce) != 0) {
-		return errors.New("data is encrypted but no password provided")
-	}
+	hasher := sha256.New()
+	defer hasher.Reset()
 
 	gr := grpchelper.NewReader(newGrpcReceiver(resp))
 	r := io.Reader(gr)
-	if len(config.Password) > 0 && len(info.MasterKeyNonce) == crypto.NonceSize && len(info.KeyNonce) == crypto.NonceSize {
-		masterKey, err := crypto.DerivePassword(config.Password, info.MasterKeyNonce)
+	if len(info.MasterKeyNonce) == crypto.NonceSize && len(info.KeyNonce) == crypto.NonceSize {
+		pwd, err := secret.Read()
+		if err != nil {
+			return err
+		}
+		masterKey, err := crypto.DerivePassword(pwd, info.MasterKeyNonce)
 		if err != nil {
 			return err
 		}
