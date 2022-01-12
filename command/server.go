@@ -61,7 +61,7 @@ func (s *serverCmd) run() cli.ActionFunc {
 		db, err := storage.NewBadgerDB(&storage.BadgerConfig{
 			InMemory:   inMemory,
 			GcInterval: dbGcInterval,
-			Path:       cc.String(dbPath),
+			Path:       path,
 		}, dbLogger)
 		if err != nil {
 			return err
