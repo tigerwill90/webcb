@@ -16,13 +16,13 @@ import (
 	"strconv"
 )
 
-type cleanCmd struct{}
+type clearCmd struct{}
 
-func newCleanCommand() *cleanCmd {
-	return &cleanCmd{}
+func newClearCommand() *clearCmd {
+	return &clearCmd{}
 }
 
-func (c *cleanCmd) run() cli.ActionFunc {
+func (c *clearCmd) run() cli.ActionFunc {
 	return func(cc *cli.Context) error {
 		host := cc.String(hostFlag)
 		if host == "" {
@@ -89,6 +89,6 @@ func (c *cleanCmd) run() cli.ActionFunc {
 
 		c := client.New(conn)
 
-		return c.Clean(context.Background())
+		return c.Clear(context.Background())
 	}
 }

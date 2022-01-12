@@ -214,7 +214,7 @@ func Run(args []string) int {
 				Action: newPasteCommand().run(),
 			},
 			{
-				Name:  "clean",
+				Name:  "clear",
 				Usage: "Clear the clipboard",
 				Flags: []cli.Flag{
 					&cli.DurationFlag{
@@ -225,7 +225,7 @@ func Run(args []string) int {
 						Name: connInsecureFlag,
 					},
 				},
-				Action: newCleanCommand().run(),
+				Action: newClearCommand().run(),
 			},
 		},
 	}

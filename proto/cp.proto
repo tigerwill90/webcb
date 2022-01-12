@@ -79,6 +79,6 @@ message CopyStream {
 service WebClipboard {
   rpc Copy (stream CopyStream) returns (google.protobuf.Empty) {}
   rpc Paste (PasteOption) returns (stream PastStream) {}
-  rpc Clean(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  rpc Clear(google.protobuf.Empty) returns (google.protobuf.Empty) {}
   rpc Status(google.protobuf.Empty) returns (ServerStatus) {}
 }

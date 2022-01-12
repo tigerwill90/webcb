@@ -21,7 +21,7 @@ const _ = grpc.SupportPackageIsVersion7
 type WebClipboardClient interface {
 	Copy(ctx context.Context, opts ...grpc.CallOption) (WebClipboard_CopyClient, error)
 	Paste(ctx context.Context, in *PasteOption, opts ...grpc.CallOption) (WebClipboard_PasteClient, error)
-	Clean(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	Clear(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	Status(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ServerStatus, error)
 }
 
@@ -99,9 +99,9 @@ func (x *webClipboardPasteClient) Recv() (*PastStream, error) {
 	return m, nil
 }
 
-func (c *webClipboardClient) Clean(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (c *webClipboardClient) Clear(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, "/proto.WebClipboard/Clean", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/proto.WebClipboard/Clear", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ func (c *webClipboardClient) Status(ctx context.Context, in *emptypb.Empty, opts
 type WebClipboardServer interface {
 	Copy(WebClipboard_CopyServer) error
 	Paste(*PasteOption, WebClipboard_PasteServer) error
-	Clean(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
+	Clear(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
 	Status(context.Context, *emptypb.Empty) (*ServerStatus, error)
 	mustEmbedUnimplementedWebClipboardServer()
 }
@@ -138,8 +138,8 @@ func (UnimplementedWebClipboardServer) Copy(WebClipboard_CopyServer) error {
 func (UnimplementedWebClipboardServer) Paste(*PasteOption, WebClipboard_PasteServer) error {
 	return status.Errorf(codes.Unimplemented, "method Paste not implemented")
 }
-func (UnimplementedWebClipboardServer) Clean(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Clean not implemented")
+func (UnimplementedWebClipboardServer) Clear(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Clear not implemented")
 }
 func (UnimplementedWebClipboardServer) Status(context.Context, *emptypb.Empty) (*ServerStatus, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Status not implemented")
@@ -204,20 +204,20 @@ func (x *webClipboardPasteServer) Send(m *PastStream) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _WebClipboard_Clean_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _WebClipboard_Clear_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WebClipboardServer).Clean(ctx, in)
+		return srv.(WebClipboardServer).Clear(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.WebClipboard/Clean",
+		FullMethod: "/proto.WebClipboard/Clear",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WebClipboardServer).Clean(ctx, req.(*emptypb.Empty))
+		return srv.(WebClipboardServer).Clear(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -248,8 +248,8 @@ var WebClipboard_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*WebClipboardServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Clean",
-			Handler:    _WebClipboard_Clean_Handler,
+			MethodName: "Clear",
+			Handler:    _WebClipboard_Clear_Handler,
 		},
 		{
 			MethodName: "Status",

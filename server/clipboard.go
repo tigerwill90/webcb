@@ -49,7 +49,7 @@ func (s *webClipboardService) Status(ctx context.Context, _ *emptypb.Empty) (*pr
 	}, nil
 }
 
-func (s *webClipboardService) Clean(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
+func (s *webClipboardService) Clear(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()

@@ -302,8 +302,8 @@ func (c *Client) Paste(ctx context.Context, w io.Writer, secret SecretManager, o
 	return nil
 }
 
-func (c *Client) Clean(ctx context.Context) error {
-	_, err := c.c.Clean(ctx, &emptypb.Empty{})
+func (c *Client) Clear(ctx context.Context) error {
+	_, err := c.c.Clear(ctx, &emptypb.Empty{})
 	return err
 }
 
