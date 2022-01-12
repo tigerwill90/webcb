@@ -24,42 +24,45 @@ func newCleanCommand() *cleanCmd {
 
 func (c *cleanCmd) run() cli.ActionFunc {
 	return func(cc *cli.Context) error {
-		tcpAddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(cc.String("host"), strconv.FormatUint(cc.Uint64("port"), 10)))
-		if err != nil {
-			return err
+		host := cc.String(hostFlag)
+		if host == "" {
+			host = "127.0.0.1"
 		}
 
-		connexionTimeout := cc.Duration(connTimeout)
+		address := net.JoinHostPort(host, strconv.FormatUint(cc.Uint64(portFlag), 10))
+
+		connexionTimeout := cc.Duration(connTimeoutFlag)
 		if connexionTimeout == 0 {
 			connexionTimeout = defaultClientConnTimeout
 		}
 
 		var options []grpc.DialOption
-		if cc.Bool(connInsecure) {
+		if cc.Bool(connInsecureFlag) {
 			options = append(options, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		} else {
 			var ca, cert, key []byte
-			if cc.String(tlsCert) == "" {
+			var err error
+			if cc.String(tlsCertFlag) == "" {
 				return errors.New("tls certificate is required in secure connection mode")
 			}
 
-			if cc.String(tlsKey) == "" {
+			if cc.String(tlsKeyFlag) == "" {
 				return errors.New("tls certificate key is required in secure connection mode")
 			}
 
-			if cc.String(tlsCa) != "" {
-				ca, err = os.ReadFile(cc.String(tlsCa))
+			if cc.String(tlsCaFlag) != "" {
+				ca, err = os.ReadFile(cc.String(tlsCaFlag))
 				if err != nil {
 					return fmt.Errorf("unable to read root certificate: %w", err)
 				}
 			}
 
-			cert, err = os.ReadFile(cc.String(tlsCert))
+			cert, err = os.ReadFile(cc.String(tlsCertFlag))
 			if err != nil {
 				return fmt.Errorf("unable to read certificate: %w", err)
 			}
 
-			key, err = os.ReadFile(cc.String(tlsKey))
+			key, err = os.ReadFile(cc.String(tlsKeyFlag))
 			if err != nil {
 				return fmt.Errorf("unable to read certificate key: %w", err)
 			}
@@ -76,7 +79,7 @@ func (c *cleanCmd) run() cli.ActionFunc {
 		defer cancel()
 		conn, err := grpc.DialContext(
 			ctx,
-			tcpAddr.String(),
+			address,
 			options...,
 		)
 		if err != nil {

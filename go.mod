@@ -26,6 +26,7 @@ require (
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20220104163920-15ed2e8cf2bd // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
+	github.com/mattn/go-tty v0.0.3 // indirect
 	github.com/secure-io/sio-go v0.3.1
 	golang.design/x/clipboard v0.5.3
 	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/docker/go-units"
+	"github.com/mattn/go-tty"
 	"github.com/tigerwill90/webcb/client"
 	"github.com/tigerwill90/webcb/client/copyopt"
 	grpctls "github.com/tigerwill90/webcb/internal/tls"
@@ -41,17 +42,38 @@ type result struct {
 
 func (cmd *copyCmd) run() cli.ActionFunc {
 	return func(cc *cli.Context) error {
-		tcpAddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(cc.String(host), strconv.FormatUint(cc.Uint64(port), 10)))
+		host := cc.String(hostFlag)
+		if host == "" {
+			host = "127.0.0.1"
+		}
+
+		address := net.JoinHostPort(host, strconv.FormatUint(cc.Uint64(portFlag), 10))
+
+		var pwd string
+		if !cc.Bool(noPasswordFlag) {
+			pwd = os.Getenv(passwordEnv)
+			if pwd == "" {
+				tty, err := tty.Open()
+				if err != nil {
+					return err
+				}
+
+				fmt.Print("Password: ")
+				pwd, err = tty.ReadPasswordNoEcho()
+				if err != nil {
+					tty.Close()
+					return err
+				}
+				tty.Close()
+			}
+		}
+
+		chunkSize, err := units.FromHumanSize(cc.String(transferRateFlag))
 		if err != nil {
 			return err
 		}
 
-		chunkSize, err := units.FromHumanSize(cc.String(transferRate))
-		if err != nil {
-			return err
-		}
-
-		connexionTimeout := cc.Duration(connTimeout)
+		connexionTimeout := cc.Duration(connTimeoutFlag)
 		if connexionTimeout == 0 {
 			connexionTimeout = defaultClientConnTimeout
 		}
@@ -66,31 +88,31 @@ func (cmd *copyCmd) run() cli.ActionFunc {
 			}()*/
 
 		var options []grpc.DialOption
-		if cc.Bool(connInsecure) {
+		if cc.Bool(connInsecureFlag) {
 			options = append(options, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		} else {
 			var ca, cert, key []byte
-			if cc.String(tlsCert) == "" {
+			if cc.String(tlsCertFlag) == "" {
 				return errors.New("tls certificate is required in secure connection mode")
 			}
 
-			if cc.String(tlsKey) == "" {
+			if cc.String(tlsKeyFlag) == "" {
 				return errors.New("tls certificate key is required in secure connection mode")
 			}
 
-			if cc.String(tlsCa) != "" {
-				ca, err = os.ReadFile(cc.String(tlsCa))
+			if cc.String(tlsCaFlag) != "" {
+				ca, err = os.ReadFile(cc.String(tlsCaFlag))
 				if err != nil {
 					return fmt.Errorf("unable to read root certificate: %w", err)
 				}
 			}
 
-			cert, err = os.ReadFile(cc.String(tlsCert))
+			cert, err = os.ReadFile(cc.String(tlsCertFlag))
 			if err != nil {
 				return fmt.Errorf("unable to read certificate: %w", err)
 			}
 
-			key, err = os.ReadFile(cc.String(tlsKey))
+			key, err = os.ReadFile(cc.String(tlsKeyFlag))
 			if err != nil {
 				return fmt.Errorf("unable to read certificate key: %w", err)
 			}
@@ -107,7 +129,7 @@ func (cmd *copyCmd) run() cli.ActionFunc {
 		defer cancel()
 		conn, err := grpc.DialContext(
 			ctx,
-			tcpAddr.String(),
+			address,
 			options...,
 		)
 		if err != nil {
@@ -115,7 +137,7 @@ func (cmd *copyCmd) run() cli.ActionFunc {
 		}
 		defer conn.Close()
 
-		copyTimeout := cc.Duration(timeout)
+		copyTimeout := cc.Duration(timeoutFlag)
 		var copyCtx context.Context
 		var copyCancel context.CancelFunc
 		if copyTimeout == 0 {
@@ -135,10 +157,10 @@ func (cmd *copyCmd) run() cli.ActionFunc {
 				copyCtx,
 				bufio.NewReader(os.Stdin),
 				copyopt.WithTransferRate(chunkSize),
-				copyopt.WithChecksum(cc.Bool(checksum)),
-				copyopt.WithTtl(cc.Duration(ttl)),
-				copyopt.WithCompression(cc.Bool(compress)),
-				copyopt.WithPassword(cc.String(password)),
+				copyopt.WithChecksum(cc.Bool(checksumFlag)),
+				copyopt.WithTtl(cc.Duration(ttlFlag)),
+				copyopt.WithCompression(cc.Bool(compressFlag)),
+				copyopt.WithPassword(pwd),
 			)
 			resultStream <- result{summary: summary, err: err}
 		}()
@@ -154,7 +176,7 @@ func (cmd *copyCmd) run() cli.ActionFunc {
 				return fmt.Errorf("copy failed: %w", res.err)
 			}
 
-			if cc.Bool(verbose) {
+			if cc.Bool(verboseFlag) {
 				cmd.ui.Successf("Successfully copied data to web clipboard!\n\n")
 				cmd.ui.Infof("Duration     : %s\n", formatDuration(res.summary.CopyDuration))
 				cmd.ui.Infof("Read         : %s\n", units.HumanSize(float64(res.summary.BytesRead)))

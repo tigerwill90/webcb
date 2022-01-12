@@ -29,47 +29,49 @@ func newPasteCommand() *pasteCmd {
 
 func (s *pasteCmd) run() cli.ActionFunc {
 	return func(cc *cli.Context) error {
-		tcpAddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(cc.String(host), strconv.FormatUint(cc.Uint64(port), 10)))
+		host := cc.String(hostFlag)
+		if host == "" {
+			host = "127.0.0.1"
+		}
+
+		address := net.JoinHostPort(host, strconv.FormatUint(cc.Uint64(portFlag), 10))
+
+		chunkSize, err := units.FromHumanSize(cc.String(transferRateFlag))
 		if err != nil {
 			return err
 		}
 
-		chunkSize, err := units.FromHumanSize(cc.String(transferRate))
-		if err != nil {
-			return err
-		}
-
-		connexionTimeout := cc.Duration(connTimeout)
+		connexionTimeout := cc.Duration(connTimeoutFlag)
 		if connexionTimeout == 0 {
 			connexionTimeout = defaultClientConnTimeout
 		}
 
 		var options []grpc.DialOption
-		if cc.Bool(connInsecure) {
+		if cc.Bool(connInsecureFlag) {
 			options = append(options, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		} else {
 			var ca, cert, key []byte
-			if cc.String(tlsCert) == "" {
+			if cc.String(tlsCertFlag) == "" {
 				return errors.New("tls certificate is required in secure connection mode")
 			}
 
-			if cc.String(tlsKey) == "" {
+			if cc.String(tlsKeyFlag) == "" {
 				return errors.New("tls certificate key is required in secure connection mode")
 			}
 
-			if cc.String(tlsCa) != "" {
-				ca, err = os.ReadFile(cc.String(tlsCa))
+			if cc.String(tlsCaFlag) != "" {
+				ca, err = os.ReadFile(cc.String(tlsCaFlag))
 				if err != nil {
 					return fmt.Errorf("unable to read root certificate: %w", err)
 				}
 			}
 
-			cert, err = os.ReadFile(cc.String(tlsCert))
+			cert, err = os.ReadFile(cc.String(tlsCertFlag))
 			if err != nil {
 				return fmt.Errorf("unable to read certificate: %w", err)
 			}
 
-			key, err = os.ReadFile(cc.String(tlsKey))
+			key, err = os.ReadFile(cc.String(tlsKeyFlag))
 			if err != nil {
 				return fmt.Errorf("unable to read certificate key: %w", err)
 			}
@@ -86,7 +88,7 @@ func (s *pasteCmd) run() cli.ActionFunc {
 		defer cancel()
 		conn, err := grpc.DialContext(
 			ctx,
-			tcpAddr.String(),
+			address,
 			options...,
 		)
 		if err != nil {
@@ -94,7 +96,7 @@ func (s *pasteCmd) run() cli.ActionFunc {
 		}
 		defer conn.Close()
 
-		pasteTimeout := cc.Duration(timeout)
+		pasteTimeout := cc.Duration(timeoutFlag)
 		var pasteCtx context.Context
 		var pasteCancel context.CancelFunc
 		if pasteTimeout == 0 {
@@ -105,14 +107,14 @@ func (s *pasteCmd) run() cli.ActionFunc {
 		defer pasteCancel()
 
 		var stdout io.Writer = os.Stdout
-		if path := cc.String(file); path != "" {
+		if path := cc.String(fileFlag); path != "" {
 			var err error
 			stdout, err = os.Create(path)
 			if err != nil {
 				return err
 			}
 		}
-		if cc.Bool(discard) {
+		if cc.Bool(discardFlag) {
 			stdout = io.Discard
 		}
 
@@ -125,7 +127,7 @@ func (s *pasteCmd) run() cli.ActionFunc {
 			pastErr <- c.Paste(
 				pasteCtx,
 				stdout,
-				pasteopt.WithPassword(cc.String(password)),
+				// pasteopt.WithPassword(pwd),
 				pasteopt.WithTransferRate(chunkSize),
 			)
 		}()

@@ -21,27 +21,33 @@ func init() {
 }
 
 const (
-	host                 = "host"
-	port                 = "port"
-	tlsCert              = "cert"
-	tlsKey               = "key"
-	tlsCa                = "ca"
-	connInsecure         = "insecure"
-	connTimeout          = "conn-timeout"
-	devMode              = "dev"
-	grpcMaxReceivedBytes = "grpc-max-receive-bytes"
-	gcInterval           = "gc-interval"
-	dbPath               = "path"
-	timeout              = "timeout"
-	transferRate         = "transfer-rate"
-	checksum             = "checksum"
-	ttl                  = "ttl"
-	verbose              = "verbose"
-	compress             = "compress"
-	password             = "password"
-	discard              = "discard"
-	file                 = "file"
-	watch                = "watch"
+	hostFlag                 = "host"
+	portFlag                 = "port"
+	tlsCertFlag              = "cert"
+	tlsKeyFlag               = "key"
+	tlsCaFlag                = "ca"
+	connInsecureFlag         = "insecure"
+	connTimeoutFlag          = "conn-timeout"
+	devModeFlag              = "dev"
+	grpcMaxReceivedBytesFlag = "grpc-max-receive-bytes"
+	gcIntervalFlag           = "gc-interval"
+	pathFlag                 = "path"
+	timeoutFlag              = "timeout"
+	transferRateFlag         = "transfer-rate"
+	checksumFlag             = "checksum"
+	ttlFlag                  = "ttl"
+	verboseFlag              = "verbose"
+	compressFlag             = "compress"
+	discardFlag              = "discard"
+	fileFlag                 = "file"
+	watchFlag                = "watch"
+	noPasswordFlag           = "no-password"
+)
+
+const (
+	passwordEnv = "WEBCB_PASSWORD"
+	hostEnv     = "WEBCB_HOST"
+	portEnv     = "WEBCB_PORT"
 )
 
 func Run(args []string) int {
@@ -55,21 +61,22 @@ func Run(args []string) int {
 		Version:     "v0.0.0",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:  host,
-				Value: "0.0.0.0",
+				Name:    hostFlag,
+				EnvVars: []string{hostEnv},
 			},
 			&cli.Uint64Flag{
-				Name:  port,
-				Value: 4444,
+				Name:    portFlag,
+				Value:   4444,
+				EnvVars: []string{portEnv},
 			},
 			&cli.StringFlag{
-				Name: tlsCert,
+				Name: tlsCertFlag,
 			},
 			&cli.StringFlag{
-				Name: tlsKey,
+				Name: tlsKeyFlag,
 			},
 			&cli.StringFlag{
-				Name: tlsCa,
+				Name: tlsCaFlag,
 			},
 		},
 		Commands: []*cli.Command{
@@ -78,14 +85,14 @@ func Run(args []string) int {
 				Usage: "Show server status",
 				Flags: []cli.Flag{
 					&cli.DurationFlag{
-						Name:  connTimeout,
+						Name:  connTimeoutFlag,
 						Value: defaultClientConnTimeout,
 					},
 					&cli.BoolFlag{
-						Name: connInsecure,
+						Name: connInsecureFlag,
 					},
 					&cli.DurationFlag{
-						Name:        timeout,
+						Name:        timeoutFlag,
 						DefaultText: "0s - no timeout",
 					},
 				},
@@ -97,19 +104,19 @@ func Run(args []string) int {
 				Usage:   "Run a webcb server",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
-						Name:  devMode,
+						Name:  devModeFlag,
 						Usage: "start a wpc server in dev mode",
 					},
 					&cli.IntFlag{
-						Name:  grpcMaxReceivedBytes,
+						Name:  grpcMaxReceivedBytesFlag,
 						Value: server.DefaultGrpcMaxRecvSize,
 					},
 					&cli.DurationFlag{
-						Name:  gcInterval,
+						Name:  gcIntervalFlag,
 						Value: 1 * time.Minute,
 					},
 					&cli.StringFlag{
-						Name: dbPath,
+						Name: pathFlag,
 					},
 				},
 				Action: newServerCmd().run(),
@@ -120,42 +127,42 @@ func Run(args []string) int {
 				Usage:   "Copy to web clipboard",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:    transferRate,
+						Name:    transferRateFlag,
 						Aliases: []string{"rate"},
 						Value:   "1048576b",
 					},
 					&cli.BoolFlag{
-						Name:    watch,
+						Name:    watchFlag,
 						Aliases: []string{"w"},
 					},
 					&cli.DurationFlag{
-						Name:        timeout,
+						Name:        timeoutFlag,
 						DefaultText: "0s - no timeout",
 					},
 					&cli.DurationFlag{
-						Name:  connTimeout,
+						Name:  connTimeoutFlag,
 						Value: defaultClientConnTimeout,
 					},
 					&cli.BoolFlag{
-						Name:    checksum,
+						Name:    checksumFlag,
 						Aliases: []string{"sum"},
 					},
 					&cli.DurationFlag{
-						Name:  ttl,
+						Name:  ttlFlag,
 						Value: server.DefaultTtl,
 					},
 					&cli.BoolFlag{
-						Name: verbose,
+						Name: verboseFlag,
 					},
 					&cli.BoolFlag{
-						Name: compress,
-					},
-					&cli.StringFlag{
-						Name:    password,
-						Aliases: []string{"pwd"},
+						Name: compressFlag,
 					},
 					&cli.BoolFlag{
-						Name: connInsecure,
+						Name:    noPasswordFlag,
+						Aliases: []string{"nopass"},
+					},
+					&cli.BoolFlag{
+						Name: connInsecureFlag,
 					},
 				},
 				Action: newCopyCommand(ui).run(),
@@ -166,34 +173,30 @@ func Run(args []string) int {
 				Usage:   "Paste from web clipboard",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:    transferRate,
+						Name:    transferRateFlag,
 						Aliases: []string{"rate"},
 						Value:   "1048576b",
 					},
 					&cli.DurationFlag{
-						Name:        timeout,
+						Name:        timeoutFlag,
 						DefaultText: "0s - no timeout",
 					},
 					&cli.DurationFlag{
-						Name:  connTimeout,
+						Name:  connTimeoutFlag,
 						Value: defaultClientConnTimeout,
 					},
 					&cli.BoolFlag{
-						Name: verbose,
+						Name: verboseFlag,
 					},
 					&cli.BoolFlag{
-						Name:  discard,
+						Name:  discardFlag,
 						Usage: "discard the clipboard stream output (for testing purpose)",
 					},
-					&cli.StringFlag{
-						Name:    password,
-						Aliases: []string{"pwd"},
-					},
 					&cli.BoolFlag{
-						Name: connInsecure,
+						Name: connInsecureFlag,
 					},
 					&cli.StringFlag{
-						Name:    file,
+						Name:    fileFlag,
 						Aliases: []string{"f"},
 					},
 				},
@@ -204,11 +207,11 @@ func Run(args []string) int {
 				Usage: "Clear the clipboard",
 				Flags: []cli.Flag{
 					&cli.DurationFlag{
-						Name:  connTimeout,
+						Name:  connTimeoutFlag,
 						Value: defaultClientConnTimeout,
 					},
 					&cli.BoolFlag{
-						Name: connInsecure,
+						Name: connInsecureFlag,
 					},
 				},
 				Action: newCleanCommand().run(),

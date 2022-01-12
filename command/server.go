@@ -27,12 +27,17 @@ func newServerCmd() *serverCmd {
 
 func (s *serverCmd) run() cli.ActionFunc {
 	return func(cc *cli.Context) error {
-		tcpAddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(cc.String(host), strconv.FormatUint(cc.Uint64(port), 10)))
+		host := cc.String(hostFlag)
+		if host == "" {
+			host = "0.0.0.0"
+		}
+
+		tcpAddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(host, strconv.FormatUint(cc.Uint64(portFlag), 10)))
 		if err != nil {
 			return err
 		}
 
-		dbGcInterval := cc.Duration(gcInterval)
+		dbGcInterval := cc.Duration(gcIntervalFlag)
 		if dbGcInterval < storage.MinGcInterval {
 			dbGcInterval = storage.MinGcInterval
 		}
@@ -41,15 +46,15 @@ func (s *serverCmd) run() cli.ActionFunc {
 		srvLogger.SetLevel(hclog.Trace)
 
 		var inMemory bool
-		if cc.Bool(devMode) && cc.String(dbPath) == "" {
+		if cc.Bool(devModeFlag) && cc.String(pathFlag) == "" {
 			inMemory = true
 		}
 
-		if !cc.Bool(devMode) && cc.String(dbPath) == "" {
+		if !cc.Bool(devModeFlag) && cc.String(pathFlag) == "" {
 			return errors.New("a path is required to persist clipboard data when dev mode is disable")
 		}
 
-		path := cc.String(filepath.Clean(dbPath))
+		path := cc.String(filepath.Clean(pathFlag))
 
 		if cc.String(path) != "" {
 			if err := os.MkdirAll(path, 0700); err != nil {
@@ -69,24 +74,24 @@ func (s *serverCmd) run() cli.ActionFunc {
 		defer db.Close()
 
 		var ca, cert, key []byte
-		if !cc.Bool(devMode) {
-			if cc.String(tlsCa) != "" {
-				ca, err = os.ReadFile(cc.String(tlsCa))
+		if !cc.Bool(devModeFlag) {
+			if cc.String(tlsCaFlag) != "" {
+				ca, err = os.ReadFile(cc.String(tlsCaFlag))
 				if err != nil {
 					return fmt.Errorf("unable to read root certificate: %w", err)
 				}
 			}
-			cert, err = os.ReadFile(cc.String(tlsCert))
+			cert, err = os.ReadFile(cc.String(tlsCertFlag))
 			if err != nil {
 				return fmt.Errorf("unable to read certificate: %w", err)
 			}
-			key, err = os.ReadFile(cc.String(tlsKey))
+			key, err = os.ReadFile(cc.String(tlsKeyFlag))
 			if err != nil {
 				return fmt.Errorf("unable to read certificate key: %w", err)
 			}
 		}
 
-		srv, err := server.NewServer(tcpAddr, db, srvLogger, server.WithGrpcMaxRecvSize(cc.Int(grpcMaxReceivedBytes)), server.WithCredentials(cert, key), server.WithCertificateAuthority(ca), server.WithDevMode(cc.Bool(devMode)))
+		srv, err := server.NewServer(tcpAddr, db, srvLogger, server.WithGrpcMaxRecvSize(cc.Int(grpcMaxReceivedBytesFlag)), server.WithCredentials(cert, key), server.WithCertificateAuthority(ca), server.WithDevMode(cc.Bool(devModeFlag)))
 		if err != nil {
 			return err
 		}
