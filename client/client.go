@@ -41,7 +41,7 @@ type Summary struct {
 }
 
 func (c *Client) Copy(ctx context.Context, r io.Reader, secret SecretManager, opts ...copyopt.Option) (*Summary, error) {
-	now := time.Now()
+
 	config := copyopt.DefaultConfig()
 	for _, opt := range opts {
 		opt.Apply(config)
@@ -111,6 +111,8 @@ func (c *Client) Copy(ctx context.Context, r io.Reader, secret SecretManager, op
 		}
 		w = encoder
 	}
+
+	now := time.Now()
 
 	if err := sendInfo(stream, config.Ttl, config.Compression, masterKeyNonce, keyNonce, iv); err != nil {
 		return nil, err
