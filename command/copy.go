@@ -11,7 +11,6 @@ import (
 	"github.com/tigerwill90/webcb/client/copyopt"
 	grpctls "github.com/tigerwill90/webcb/internal/tls"
 	"github.com/urfave/cli/v2"
-	"golang.design/x/clipboard"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -58,14 +57,9 @@ func (cmd *copyCmd) run() cli.ActionFunc {
 			connexionTimeout = defaultClientConnTimeout
 		}
 
-		_ = clipboard.Watch(context.TODO(), clipboard.FmtText)
-
-		/*		go func() {
-				for data := range ch {
-					// print out clipboard data whenever it is changed
-					println(string(data))
-				}
-			}()*/
+		/*		if err := clipboard.Init(); err != nil {
+				return err
+			}*/
 
 		var options []grpc.DialOption
 		if cc.Bool(connInsecureFlag) {
