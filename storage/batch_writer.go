@@ -61,7 +61,7 @@ func (bw *BatchWriter) lockVersion() error {
 			return txn.Set([]byte(pendingTxnKey), value)
 		})
 	})
-	return nil
+	return err
 }
 
 func (bw *BatchWriter) unlockVersion() error {
