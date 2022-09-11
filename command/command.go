@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/mattn/go-tty"
-	vtgrpc "github.com/planetscale/vtprotobuf/codec/grpc"
 	"github.com/tigerwill90/webcb/server"
 	"github.com/urfave/cli/v2"
 	"google.golang.org/grpc/encoding"
@@ -22,7 +21,7 @@ func init() {
 		panic(err)
 	}
 	rand.Seed(int64(binary.LittleEndian.Uint64(b[:])))
-	encoding.RegisterCodec(vtgrpc.Codec{})
+	encoding.RegisterCodec(&vtProtoCodec{})
 }
 
 const (

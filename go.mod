@@ -6,6 +6,7 @@ require (
 	github.com/dgraph-io/badger/v2 v2.2007.4
 	github.com/docker/go-units v0.5.0
 	github.com/gen2brain/beeep v0.0.0-20220909211152-5a9ec94374f6
+	github.com/golang/protobuf v1.5.2
 	github.com/hashicorp/go-hclog v1.3.0
 	github.com/jwalton/gchalk v1.3.0
 	github.com/klauspost/compress v1.15.9
@@ -31,7 +32,6 @@ require (
 	github.com/go-toast/toast v0.0.0-20190211030409-01e6764cf0a4 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/golang/glog v1.0.0 // indirect
-	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/jwalton/go-supportscolor v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
