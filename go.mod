@@ -2,6 +2,8 @@ module github.com/tigerwill90/webcb
 
 go 1.18
 
+retract v0.0.3
+
 require (
 	github.com/dgraph-io/badger/v2 v2.2007.4
 	github.com/docker/go-units v0.5.0
