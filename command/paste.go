@@ -137,9 +137,8 @@ func (s *pasteCmd) run() cli.ActionFunc {
 				}
 				return fmt.Errorf("paste failed: %w", cErr)
 			}
-			beeep.Notify("pasted", "this is looking absoluty awesome", "")
 		}
 
-		return nil
+		return beeep.Notify("Paste success", "All data has been copied from remote clipboard", "")
 	}
 }

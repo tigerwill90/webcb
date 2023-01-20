@@ -8,6 +8,8 @@ import (
 	"github.com/tigerwill90/webcb/internal/grpc"
 	"github.com/tigerwill90/webcb/proto"
 	"github.com/tigerwill90/webcb/storage"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"io"
 	"time"
@@ -35,7 +37,7 @@ type webClipboardService struct {
 func (s *webClipboardService) Status(ctx context.Context, _ *emptypb.Empty) (*proto.ServerStatus, error) {
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, status.Error(codes.Canceled, ctx.Err().Error())
 	default:
 	}
 	lsm, vlog := s.db.Size()
@@ -52,12 +54,12 @@ func (s *webClipboardService) Status(ctx context.Context, _ *emptypb.Empty) (*pr
 func (s *webClipboardService) Clear(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, status.Error(codes.Canceled, ctx.Err().Error())
 	default:
 	}
 	if err := s.db.DropAll(); err != nil {
 		s.logger.Error(err.Error())
-		return nil, err
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 	return &emptypb.Empty{}, nil
 }
@@ -71,7 +73,8 @@ func (s *webClipboardService) Copy(server proto.WebClipboard_CopyServer) error {
 
 	fi := req.GetInfo()
 	if fi == nil {
-		return errors.New("protocol error: expected an info header but get a chunk stream")
+		s.logger.Error(err.Error())
+		return status.Error(codes.Internal, "protocol error: expected an info header but get a chunk stream")
 	}
 
 	ttl := time.Duration(fi.Ttl)
@@ -83,7 +86,7 @@ func (s *webClipboardService) Copy(server proto.WebClipboard_CopyServer) error {
 	_, err = s.db.WriteBatch(r, ttl, fi.Compressed, fi.MasterKeyNonce, fi.KeyNonce, fi.Iv)
 	if err != nil {
 		s.logger.Error(err.Error())
-		return err
+		return status.Error(codes.Internal, err.Error())
 	}
 
 	return server.SendAndClose(&emptypb.Empty{})
@@ -107,7 +110,7 @@ func (s *webClipboardService) Paste(option *proto.PasteOption, server proto.WebC
 			return sender.SendError(fmt.Errorf("no data to paste: %w", err), KeyNotFound)
 		}
 		s.logger.Error(err.Error())
-		return err
+		return status.Error(codes.Internal, err.Error())
 	}
 
 	return nil
