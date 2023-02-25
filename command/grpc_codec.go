@@ -2,7 +2,7 @@ package command
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 // name is the name registered for the proto compressor.
